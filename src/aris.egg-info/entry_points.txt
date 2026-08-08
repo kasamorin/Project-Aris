@@ -1,0 +1,2 @@
+[console_scripts]
+aris = aris.cli:main

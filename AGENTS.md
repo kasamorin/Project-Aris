@@ -8,10 +8,16 @@
 - 若测试命令超时/卡死，则视为 bash 不可用：避免用 bash，尤其禁止 git 命令；需要提交时把命令与提交信息写好交给用户手动执行。
 - 文件操作优先用 read/write/edit/glob 工具；glob 偶发失败时改用 read 目录。
 
+## 会话启动检查（每次开始工作前）
+
+- **Embedding 方案确认**：先问用户当前用「本地模型」还是「Cloudflare BGE-M3」，
+  结果影响 memory 模块设计。用户未确认前不实现任何 Embedding 连接。
+
 ## 现状
 
-- 项目尚无任何代码。当前仓库 = 文档 + .git。
-- 第一步任务是「搭轻量 Python 骨架」（见 PROJECT-PLAN.md），因 bash 问题被搁置。
+- 骨架已搭（2026-08）：pyproject.toml + src/aris/（config/logging/cli + 模块占位 + csrc）。
+- 下一步：用户手动 `uv sync` 后接入 LLM（等选型确定）。
+- 人格模块（persona）已搁置：实现方式未定（提示词工程 vs MCP）。
 - 状态权威来源：
   - `CODING-GUIDELINES.md` —— 编码原则与哲学（必须遵守）
   - `PROJECT-PLAN.md` —— 技术决策、模块划分、路线图、待定事项
@@ -34,4 +40,6 @@
 ## 待定（勿替用户做决定）
 
 - LLM 提供方：用户正在调研选型，**不要接入/实现任何 LLM 连接**，直到用户确定
-- STT 选型、Embedding 模型、记忆库（计划 PostgreSQL + pgvector，后加 GraphRAG）
+- Embedding 方案：本地（Bekko）vs Cloudflare BGE-M3，会话启动时确认；本地待用户实测 CPU 占用
+- STT 选型、人格系统实现方式（提示词工程 vs MCP，persona 模块已搁置）
+- 记忆库（计划 PostgreSQL + pgvector，后加 GraphRAG）

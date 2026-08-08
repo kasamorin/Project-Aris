@@ -1,0 +1,23 @@
+[project]
+name = "aris"
+version = "0.1.0"
+description = "拟人 AI Aris —— 目标是社会学意义上的人"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic-settings>=2.0",
+    "loguru>=0.7",
+]
+
+[project.scripts]
+aris = "aris.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

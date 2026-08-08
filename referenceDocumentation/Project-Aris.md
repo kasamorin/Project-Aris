@@ -9,7 +9,7 @@
 * Aris
   * 记忆系统
     * 工具
-      * Embedding Model （预计本地部署Bekko-embedding-v1-a25m）
+      * Embedding Model （本地优先：Bekko-embedding-v1-a25m，待实测 CPU 占用；备选：Cloudflare BGE-M3）
       * 数据库（预计 PostgreSQL + pgvector & GraphRAG）
   * 语音系统
     * TTS（预计Edge TTS / Azure TTS）
