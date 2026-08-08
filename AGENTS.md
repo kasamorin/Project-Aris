@@ -27,8 +27,9 @@
 
 ## 编码约定（摘要，详见 CODING-GUIDELINES.md）
 
-- 标识符英文，注释中文
-- Git 提交：Conventional Commits 前缀 + 中文内容（如 `feat: 添加登录功能`）
+- 标识符英文，注释中文；docstring 中文；行宽 100；类型标注尽量多
+- Git 提交：Conventional Commits 完整格式（head + body），中文内容（如 `feat: 添加登录功能`）
+- C 命名：函数大驼峰、变量小驼峰、指针星号靠变量
 - KISS：一个东西只做一件事
 - 遇到歧义/不确定需求：先问用户，不擅自假设
 
