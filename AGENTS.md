@@ -21,6 +21,7 @@
 - 状态权威来源：
   - `CODING-GUIDELINES.md` —— 编码原则与哲学（必须遵守）
   - `PROJECT-PLAN.md` —— 技术决策、模块划分、路线图、待定事项
+  - `PROGRESS.md` —— 开发进度报告（当前阻塞、待定决策、下一步）
   - `referenceDocumentation/` —— 参考文档（记忆架构、语音选型、开发总览）
 
 ## 编码约定（摘要，详见 CODING-GUIDELINES.md）
