@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI社会人格构建 · 技术选型概念文档</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #f5f7fc;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            padding: 2rem 1.5rem;
+            line-height: 1.6;
+            color: #1e293b;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 2.5rem 2.8rem;
+            box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.12);
+        }
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            background: linear-gradient(145deg, #0b2b5c, #1d4b8f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.3rem;
+            border-bottom: 3px solid #e9edf5;
+            padding-bottom: 0.8rem;
+        }
+        .subtitle {
+            color: #475569;
+            font-size: 1rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            background: #e9edf5;
+            padding: 0.2rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: #1e293b;
+            font-weight: 500;
+        }
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 2.2rem;
+            margin-bottom: 1rem;
+            color: #0b2b5c;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        h2::before {
+            content: "◆";
+            color: #3b82f6;
+            font-size: 1.2rem;
+        }
+        h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-top: 1.6rem;
+            margin-bottom: 0.6rem;
+            color: #1e3a6b;
+        }
+        p {
+            margin-bottom: 0.9rem;
+        }
+        ul,
+        ol {
+            padding-left: 1.8rem;
+            margin-bottom: 1rem;
+        }
+        li {
+            margin-bottom: 0.3rem;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1.2rem 0;
+        }
+        .card {
+            background: #f8faff;
+            border-radius: 16px;
+            padding: 1.5rem 1.8rem;
+            border: 1px solid #e2e8f0;
+            transition: 0.2s;
+        }
+        .card:hover {
+            border-color: #b3c9f0;
+            background: #f4f9ff;
+        }
+        .card h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.7rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .card h4 .icon {
+            font-size: 1.3rem;
+        }
+        .card ul {
+            padding-left: 1.2rem;
+        }
+        .card ul li {
+            margin-bottom: 0.2rem;
+        }
+        .pro {
+            border-left: 4px solid #22c55e;
+        }
+        .con {
+            border-left: 4px solid #ef4444;
+        }
+        .alt-card {
+            background: #f1f5f9;
+            border-radius: 14px;
+            padding: 1.2rem 1.5rem;
+            margin: 0.8rem 0;
+            border-left: 4px solid #64748b;
+        }
+        .alt-card strong {
+            color: #0b2b5c;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.2rem 0;
+            font-size: 0.95rem;
+        }
+        th {
+            background: #e9edf5;
+            text-align: left;
+            padding: 0.6rem 1rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .tag {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1d4b8f;
+            padding: 0.1rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-right: 4px;
+        }
+        .footnote {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e2e8f0;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+        @media (max-width: 700px) {
+            .container {
+                padding: 1.5rem;
+            }
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 构建“社会学意义上的人” · AI技术选型</h1>
+        <div class="subtitle">
+            <span>📌 核心方案：<strong>PostgreSQL + pgvector + GraphRAG</strong></span>
+            <span class="badge">概念文档 v1.0</span>
+            <span class="badge">2026 · 技术决策参考</span>
+        </div>
+
+        <p style="font-size:1.05rem; background:#f0f4fe; padding:1rem 1.5rem; border-radius:14px;">
+            <strong>一句话定位：</strong> 用一套关系型数据库同时承载 <strong>语义记忆</strong>（向量）与 <strong>结构记忆</strong>（知识图谱），模拟人类认知的双轨机制。
+        </p>
+
+        <h2>🧩 架构概览 · 三组件角色</h2>
+        <div style="display:flex; flex-wrap:wrap; gap:1rem; margin:1rem 0 1.5rem;">
+            <div style="flex:1; min-width:180px; background:#eef2ff; padding:0.8rem 1.2rem; border-radius:40px; text-align:center; font-weight:600;">🗄️ PostgreSQL<br><span style="font-weight:400; font-size:0.85rem;">事务存储 · 统一底座</span></div>
+            <div style="flex:1; min-width:180px; background:#dbeafe; padding:0.8rem 1.2rem; border-radius:40px; text-align:center; font-weight:600;">📊 pgvector<br><span style="font-weight:400; font-size:0.85rem;">向量检索 · 语义模糊匹配</span></div>
+            <div style="flex:1; min-width:180px; background:#c7ddfa; padding:0.8rem 1.2rem; border-radius:40px; text-align:center; font-weight:600;">🔗 GraphRAG<br><span style="font-weight:400; font-size:0.85rem;">知识图谱 · 关系推理</span></div>
+        </div>
+        <ul>
+            <li><strong>PostgreSQL</strong> — 作为“大脑皮层”，管理所有结构化数据（人物属性、事件时间线、对话元数据），确保ACID事务一致性。</li>
+            <li><strong>pgvector</strong> — 实现“语义联想”，将文本、行为模式转化为向量，通过相似度搜索找到“意思最接近”的记忆片段。</li>
+            <li><strong>GraphRAG</strong> （通过Apache AGE或递归CTE）— 构建“逻辑网络”，记录实体间的关系（社交、因果、从属），支持多跳推理（如“A影响B，B影响C，则A如何影响C”）。</li>
+        </ul>
+
+        <h2>⚖️ 利弊分析</h2>
+        <div class="grid-2">
+            <div class="card pro">
+                <h4><span class="icon">✅</span> 优势 (Pros)</h4>
+                <ul>
+                    <li><strong>统一存储，数据一致</strong> — 所有记忆在同一事务引擎内，避免向量库与图库的数据不一致问题。</li>
+                    <li><strong>双轨检索</strong> — 同时支持语义（向量）和关系（图谱）查询，检索召回率高于单一方案。</li>
+                    <li><strong>生态成熟</strong> — PostgreSQL 是业界最稳健的数据库之一，pgvector 已生产可用，GraphRAG 有官方参考实现。</li>
+                    <li><strong>混合查询能力</strong> — 可用 SQL 联合查询（如“找出最近一周内与A有互动且话题包含‘技术’的人”），灵活度极高。</li>
+                    <li><strong>开源可控</strong> — 无需依赖专有服务，可自主部署、定制。</li>
+                </ul>
+            </div>
+            <div class="card con">
+                <h4><span class="icon">❌</span> 劣势 (Cons)</h4>
+                <ul>
+                    <li><strong>资源消耗高</strong> — GraphRAG 的图谱构建与维护比纯向量 RAG 成本高 <strong>10~20 倍</strong>（索引、推理开销）。</li>
+                    <li><strong>实现复杂度</strong> — 需在 <code>Apache AGE</code>（功能强但部署受限）与 <code>递归CTE</code>（轻量但SQL复杂）间取舍。</li>
+                    <li><strong>冷启动困难</strong> — 初期图谱稀疏，GraphRAG 的优势无法发挥，需大量数据积累。</li>
+                    <li><strong>扩展性挑战</strong> — 单机 PostgreSQL 在处理海量向量+图谱时可能成为瓶颈，分布式方案尚不成熟。</li>
+                    <li><strong>运维难度</strong> — 同时维护向量索引（IVFFlat/HNSW）和图索引，备份恢复、调优更复杂。</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>🔄 替代方案 · 主流路线对比</h2>
+        <p>根据实际场景（规模、开发效率、运维能力），以下替代组合同样值得考虑：</p>
+
+        <div class="alt-card">
+            <strong>🔹 专用图数据库 + 向量库</strong><br>
+            <span style="color:#475569;">如 <strong>Neo4j</strong>（图）+ <strong>Pinecone</strong> / <strong>Qdrant</strong>（向量）。</span><br>
+            <span style="font-size:0.9rem;">✅ 图查询性能极优，向量检索专精；❌ 数据同步复杂，需维护双系统，事务一致性难保证。</span>
+        </div>
+
+        <div class="alt-card">
+            <strong>🔹 纯向量库 + 外部知识图谱</strong><br>
+            <span style="color:#475569;">如 <strong>Milvus</strong> + <strong>Neo4j</strong> 或 <strong>RDF</strong> 存储。</span><br>
+            <span style="font-size:0.9rem;">✅ 各司其职，扩展性强；❌ 应用层需编排两套API，运维成本高，OLTP能力弱。</span>
+        </div>
+
+        <div class="alt-card">
+            <strong>🔹 轻量化：SQLite + 向量扩展 + 嵌入式图谱</strong><br>
+            <span style="color:#475569;">如 <strong>sqlite-vec</strong> + 内存图（如 <strong>NetworkX</strong>）。</span><br>
+            <span style="font-size:0.9rem;">✅ 适合原型、边缘设备；❌ 不适合生产级大规模并发，缺乏高级图查询语言。</span>
+        </div>
+
+        <div class="alt-card">
+            <strong>🔹 全托管云服务</strong><br>
+            <span style="color:#475569;">如 <strong>Azure Cosmos DB</strong>（支持向量+图）、<strong>Amazon Neptune</strong> + <strong>OpenSearch</strong>。</span><br>
+            <span style="font-size:0.9rem;">✅ 免运维，弹性伸缩；❌ 供应商锁定，成本高昂，数据隐私需审慎。</span>
+        </div>
+
+        <h2>📋 关键决策维度 · 对照表</h2>
+        <table>
+            <thead>
+                <tr><th>维度</th><th>PostgreSQL+pgvector+GraphRAG</th><th>替代组合（如 Neo4j+Pinecone）</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>数据一致性</strong></td><td>⭐⭐⭐⭐⭐（单一事务源）</td><td>⭐⭐（需应用层两阶段提交）</td></tr>
+                <tr><td><strong>图查询能力</strong></td><td>⭐⭐⭐（AGE 强大，CTE 有限）</td><td>⭐⭐⭐⭐⭐（原生图数据库）</td></tr>
+                <tr><td><strong>向量检索性能</strong></td><td>⭐⭐⭐⭐（pgvector 高效）</td><td>⭐⭐⭐⭐⭐（专用向量库优化）</td></tr>
+                <tr><td><strong>运维复杂度</strong></td><td>⭐⭐⭐（单一数据库但多索引）</td><td>⭐⭐（双系统监控调优更难）</td></tr>
+                <tr><td><strong>开发迭代速度</strong></td><td>⭐⭐⭐⭐（SQL 统一查询）</td><td>⭐⭐⭐（需学习 Cypher + 向量API）</td></tr>
+                <tr><td><strong>资源消耗（中小规模）</strong></td><td>⭐⭐⭐⭐（适中）</td><td>⭐⭐⭐（双份资源）</td></tr>
+                <tr><td><strong>可扩展性（大规模）</strong></td><td>⭐⭐（受限于单机PG）</td><td>⭐⭐⭐⭐（可分布式部署）</td></tr>
+            </tbody>
+        </table>
+
+        <h2>💡 选型建议</h2>
+        <ul>
+            <li><strong>初创/研究原型</strong> → 优先 <strong>PostgreSQL+pgvector+递归CTE</strong>，轻量起步，利用SQL灵活度快速验证。</li>
+            <li><strong>生产级中小规模（< 100万实体）</strong> → 推荐 <strong>PostgreSQL+pgvector+Apache AGE</strong>，若云环境支持则部署。</li>
+            <li><strong>大规模高并发（> 1000万节点）</strong> → 考虑 <strong>Neo4j 集群 + 独立向量库</strong>，并引入数据同步中间件。</li>
+            <li><strong>团队偏运维简化</strong> → 选择 <strong>全托管云方案</strong>，但注意数据出口合规。</li>
+            <li><strong>边缘/离线场景</strong> → <strong>SQLite + 轻量图谱</strong> 足够。</li>
+        </ul>
+        <p style="background:#f1f5f9; padding:0.8rem 1.2rem; border-radius:12px; margin-top:1rem;">
+            <strong>📌 核心原则：</strong> 没有“银弹”。<strong>PostgreSQL+pgvector+GraphRAG</strong> 是平衡性极佳的统一底座，尤其适合需要强一致性和混合查询的场景。若预算、性能或扩展性成为瓶颈，再逐步演进到专用组件。
+        </p>
+
+        <h2>📎 补充说明</h2>
+        <ul>
+            <li><strong>事件记忆</strong>（对话日志）仍需单独存储，可作为长期记忆的“原料”。</li>
+            <li><strong>记忆更新策略</strong>：定期后台任务（如每日）对事件进行摘要，转化为向量和图谱节点。</li>
+            <li><strong>混合检索</strong>：结合全文检索（pg_trgm）可进一步提升召回。</li>
+            <li><strong>监控要点</strong>：向量索引构建时间、图谱查询延迟、缓存命中率。</li>
+        </ul>
+
+        <div class="footnote">
+            <p>📖 本概念文档基于 2026 年主流技术现状撰写，具体实现请参考各项目官方文档：<br>
+            <span class="tag">PostgreSQL 17</span> <span class="tag">pgvector 0.8+</span> <span class="tag">Apache AGE 1.5+</span> <span class="tag">Neo4j 5.x</span></p>
+            <p style="margin-top:0.3rem;">✨ 构建“社会学意义上的人”是系统工程，技术之外，数据质量、交互设计和伦理考量同样关键。</p>
+        </div>
+    </div>
+</body>
+</html>

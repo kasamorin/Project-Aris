@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent 开发路线图：从0到“社会人”</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background: #f7f9fc;
+            color: #1e293b;
+            line-height: 1.7;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+            padding: 48px 56px;
+        }
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.25em;
+            color: #0f172a;
+            border-bottom: 4px solid #3b82f6;
+            padding-bottom: 12px;
+        }
+        .subhead {
+            font-size: 1.05rem;
+            color: #475569;
+            margin-top: -0.2em;
+            margin-bottom: 2.2em;
+            border-left: 4px solid #94a3b8;
+            padding-left: 16px;
+            background: #f8fafc;
+            border-radius: 0 8px 8px 0;
+        }
+        h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            margin-top: 1.8em;
+            margin-bottom: 0.5em;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        h2 .badge {
+            font-size: 0.8rem;
+            background: #3b82f6;
+            color: white;
+            padding: 2px 14px;
+            border-radius: 30px;
+            font-weight: 500;
+        }
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-top: 1.4em;
+            margin-bottom: 0.3em;
+            color: #1e293b;
+        }
+        p {
+            margin-bottom: 1em;
+        }
+        ul, ol {
+            margin: 0.6em 0 1.2em 1.8em;
+        }
+        li {
+            margin-bottom: 0.3em;
+        }
+        code {
+            background: #eef2f6;
+            padding: 0.2em 0.6em;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-family: "SF Mono", "Fira Code", monospace;
+            color: #1e293b;
+        }
+        .project-box {
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 12px 20px;
+            margin: 0.8em 0 1.2em 0;
+            border-left: 4px solid #3b82f6;
+        }
+        .project-box strong {
+            color: #0f172a;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5em 0;
+            font-size: 0.95rem;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        th {
+            background: #0f172a;
+            color: white;
+            font-weight: 600;
+            padding: 12px 16px;
+            text-align: left;
+        }
+        td {
+            background: #f8fafc;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .highlight {
+            background: #dbeafe;
+            border-radius: 6px;
+            padding: 0 6px;
+        }
+        .callout {
+            background: #fef9e7;
+            border-left: 6px solid #f59e0b;
+            padding: 16px 22px;
+            border-radius: 8px;
+            margin: 1.8em 0;
+            font-style: italic;
+        }
+        .callout strong {
+            color: #b45309;
+        }
+        hr {
+            border: none;
+            border-top: 2px dashed #d1d5db;
+            margin: 2.2em 0;
+        }
+        .footer-meta {
+            margin-top: 2.5em;
+            font-size: 0.9rem;
+            color: #64748b;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 2em;
+        }
+        @media (max-width: 640px) {
+            .container { padding: 24px 20px; }
+            h1 { font-size: 1.8rem; }
+            th, td { padding: 10px 12px; }
+            ul, ol { margin-left: 1.2em; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🧠 AI Agent 开发路线图</h1>
+    <div class="subhead">从0到“社会人” · 四阶段可实践方案 · 开源项目推荐</div>
+
+    <p style="font-size:1.05rem; margin-bottom:1.8rem;">
+        本路线图遵循 <strong>“先跑通核心链路，再逐层叠加能力”</strong> 的原则，参考了 Neuro-sama 的演进路径。
+        每个阶段都提供可直接使用的开源项目，适合从零开始的开发者。
+    </p>
+
+    <!-- ===== 阶段零 ===== -->
+    <h2>阶段零 · 核心链路 <span class="badge">STT → LLM → TTS</span></h2>
+    <p><strong>目标：</strong>让 Agent “能说话”——跑通语音识别、大模型推理、语音合成的完整管道。</p>
+
+    <h3>推荐项目</h3>
+    <div class="project-box">
+        <strong>AITuber OnAir</strong>（TypeScript）<br>
+        专为构建 Neuro-sama 风格的 AI Vtuber 设计，开箱支持聊天、说话、回应观众、记忆、PNG/VRM/Live2D 形象。
+    </div>
+    <div class="project-box">
+        <strong>AI_Vtuber_2.0</strong>（Python）<br>
+        使用 OpenAI Realtime API 实现实时语音交互，集成 B站/YouTube 弹幕输入，含 Flask 监控界面。
+    </div>
+    <div class="project-box">
+        <strong>StreamCream</strong>（Python）<br>
+        Live2D + GPT-SoVITS 全自动直播方案，包含文案生成和模型表情动作控制。
+    </div>
+    <p><strong>行动：</strong>选一个项目克隆，配置好 API 密钥（LLM + TTS），跑通并听到 AI 说话即成功。</p>
+
+    <hr>
+
+    <!-- ===== 阶段一 ===== -->
+    <h2>阶段一 · 记忆系统 <span class="badge">持久化</span></h2>
+    <p><strong>目标：</strong>让 Agent “记住”历史，从“每轮失忆”变为拥有连贯上下文。</p>
+
+    <h3>轻量入门方案</h3>
+    <div class="project-box">
+        <strong>nanoAgent</strong>（Python，~200行）<br>
+        极简 Agent 实现，<code>agent-memory.py</code> 仅 206 行，演示持久记忆与任务分解，适合先读懂原理。
+    </div>
+    <div class="project-box">
+        <strong>memory-trigger</strong>（即插即用）<br>
+        挂载一份长期记忆，不被上下文窗口压没。直接放入 Agent 目录即可使用，支持命令行模式。
+    </div>
+    <div class="project-box">
+        <strong>agent-knowledge</strong>（Python，<code>pip install compiled-memory</code>）<br>
+        自动将会话编译为结构化知识，带主张/证据追溯。
+    </div>
+    <div class="project-box">
+        <strong>llmem</strong>（Python）<br>
+        基于 SQLite 的持久记忆服务，支持自动合并相似记忆，跨会话持久化。
+    </div>
+    <p><strong>行动：</strong>在 Agent 上挂载 <code>memory-trigger</code> 或 <code>llmem</code>，让它能记住上一轮聊过的内容。</p>
+
+    <hr>
+
+    <!-- ===== 阶段二 ===== -->
+    <h2>阶段二 · 人格与一致性 <span class="badge">身份</span></h2>
+    <p><strong>目标：</strong>让 Agent 拥有稳定、独特的“自我”，每次回复都像同一个人。</p>
+
+    <h3>推荐项目</h3>
+    <div class="project-box">
+        <strong>ego-mcp</strong>（MCP 服务器）<br>
+        让 LLM Agent 跨会话保持一致的人格、记忆和情绪，自带实时观测仪表盘，不绑定特定 LLM。
+    </div>
+    <div class="project-box">
+        <strong>openhanako</strong>（Python）<br>
+        “有记忆、有性格、会主动行动”的个人 AI Agent，通过人格模板和自定义人格文件塑造独特性格。
+    </div>
+    <div class="project-box">
+        <strong>SoulLink</strong>（为 Hermes Agent 设计）<br>
+        运行时让 Agent “感觉像是同一个人”，包含实时情绪检测、长期记忆、上下文管理。
+    </div>
+    <div class="project-box">
+        <strong>Neuro-sama 官方身份框架</strong><br>
+        包含人格引擎（性格特征+情绪建模）、记忆系统（情景记忆+工作记忆）、认知管道。
+    </div>
+    <p><strong>行动：</strong>编写一个“人设文件”（名字、性格标签、说话风格），通过 <code>ego-mcp</code> 或 <code>openhanako</code> 的模板机制加载，使 AI 保持风格一致。</p>
+
+    <hr>
+
+    <!-- ===== 阶段三 ===== -->
+    <h2>阶段三 · 完整互动 <span class="badge">感知与行动</span></h2>
+    <p><strong>目标：</strong>Agent 能看弹幕、控制模型、玩游戏，接近 Neuro-sama 的完整形态。</p>
+
+    <h3>推荐项目</h3>
+    <div class="project-box">
+        <strong>Neuro-sama 官方 API</strong>（WebSocket 服务器）<br>
+        包含完整的 Neuro-sama 人格实现，可作为 WebSocket 服务器运行，可通过 Neuro API 连接游戏，提供 Rust SDK。
+    </div>
+    <div class="project-box">
+        <strong>SwarmClone</strong>（全开源 AI 虚拟主播）<br>
+        专为 B站、Twitch 等平台设计的高质量实时互动，框架灵活可扩展。
+    </div>
+    <div class="project-box">
+        <strong>Megumi</strong>（模块化 AI Vtuber）<br>
+        个人开发的模块化项目，目标“做一个像 Neuro 那样的 AI Vtuber”，通过 core server + 多进程 + WebSocket 实现组件互联，结构清晰。
+    </div>
+    <div class="project-box">
+        <strong>TheDyingYAK/Neuro-sama</strong>（复刻项目）<br>
+        7 天内复刻 Neuro-sama，全部运行在本地模型上，消费级硬件可跑，是最接近“手把手教你做一个 Neuro-sama”的参考实现。
+    </div>
+    <p><strong>行动：</strong>参考 <code>TheDyingYAK/Neuro-sama</code> 或 <code>SwarmClone</code>，集成弹幕交互、模型控制和游戏联动。</p>
+
+    <hr>
+
+    <!-- ===== 行动路线表 ===== -->
+    <h2>📋 总体行动路线</h2>
+    <table>
+        <thead>
+            <tr><th>阶段</th><th>目标</th><th>推荐项目</th><th>预计时间</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>阶段零</strong></td><td>跑通 STT→LLM→TTS</td><td><code>AITuber OnAir</code> 或 <code>AI_Vtuber_2.0</code></td><td>1–2 天</td></tr>
+            <tr><td><strong>阶段一</strong></td><td>接入记忆系统</td><td><code>nanoAgent</code> 看懂原理 → <code>memory-trigger</code> 挂载</td><td>2–3 天</td></tr>
+            <tr><td><strong>阶段二</strong></td><td>注入人格一致性</td><td><code>ego-mcp</code> 或 <code>openhanako</code></td><td>3–5 天</td></tr>
+            <tr><td><strong>阶段三</strong></td><td>完整互动能力</td><td><code>SwarmClone</code> 或 <code>TheDyingYAK/Neuro-sama</code></td><td>1–2 周</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ===== 核心建议 ===== -->
+    <div class="callout">
+        <strong>💡 核心建议</strong><br>
+        • 不要一开始追求“完整社会人”，先让阶段零跑起来——听到 AI 开口说话的那一刻，成就感会推着你往前走。<br>
+        • 记忆系统从最简单的开始：<code>nanoAgent</code> 的 206 行代码读一遍，你就理解记忆系统的本质了。<br>
+        • 人格一致性在记忆之后再加——记忆是“骨架”，人格是“血肉”，顺序不能反。
+    </div>
+
+    <div style="background:#f1f5f9; border-radius:10px; padding:16px 22px; margin:1.8em 0;">
+        <p style="margin:0; font-weight:500;">“Agent 的一切都是记忆——人格是‘我记得我是谁’，规则是‘我记得该怎么做事’，技能是‘我记得怎么做某类事’。”</p>
+    </div>
+
+    <p style="margin-top:2em;">
+        <strong>从今天开始</strong>，选一个项目克隆下来，把核心链路跑通。剩下的，一步一步来。
+    </p>
+
+    <div class="footer-meta">
+        文档生成于 2026 · 基于开源社区实践整理 · 持续迭代
+    </div>
+</div>
+</body>
+</html>
