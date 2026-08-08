@@ -19,10 +19,24 @@
 | 编程语言 | Python 为主 | C 语言辅助（性能敏感处），必要时 TypeScript |
 | Python 版本 | 开发按 3.14，最低支持 3.12 | 尽量用新特性 |
 | 依赖管理 | uv | 锁文件，Termux 可用 |
-| 配置系统 | pydantic-settings 优先 | `.env` + 环境变量，API key 一律放 env；不行再用标准库方案 |
+| 配置系统 | pydantic-settings 优先，按环境分级 | `.env` + 环境变量，API key 一律放 env；备选方案见下方「配置系统方案」 |
 | 日志 | loguru | 统一日志方案 |
 | 包布局 | src 布局 | 包名 `aris`，`src/aris/` |
 | 测试 | pytest（待确认） | 骨架阶段暂不强制 |
+
+## 配置系统方案（2026-08，待定）
+
+背景：Termux（aarch64-android，Python 3.14）无 pydantic-core 预编译 wheel，源码构建
+需 Rust（不可行），Termux 仓库亦无 python-pydantic 包（已实测）→ pydantic-settings
+在 Termux 无法安装。按环境分级：
+
+1. **第一选择**：pydantic-settings（PC / Linux 桌面可装时）
+2. **第二选择**：标准库实现（dataclass + 手写 .env 解析，约 30 行，零依赖，两平台通吃）
+3. **最后备选（野路子）**：C 语言模拟配置解析（ctypes 接入，不推荐：文本解析用 C
+   违背 KISS，增加编译依赖，可维护性差）
+
+定案方式：用户到 PC 上实测 pydantic-settings 可装性后决定；在此之前 config.py
+保持现状不重写。
 
 ## 模块划分（对应 Project-Aris.md）
 
@@ -44,7 +58,8 @@
 ## 开发路线（第一步）
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
-   - 骨架文件已写完（2026-08，仓库内）；**待用户在 Termux 手动执行 `uv sync` 安装依赖**（AGENTS.md 有完整命令清单）
+   - 骨架文件已完成（2026-08）；`uv sync` 在 Termux 被 pydantic-core 阻塞，
+     等配置系统方案定案后执行（见上节）
 2. 接入 LLM（等选型确定）
 3. 跑通文字对话
 4. 记忆系统（PostgreSQL + pgvector）
@@ -55,6 +70,8 @@
 
 ## 待定事项
 
+- [ ] 配置系统方案（用户 PC 实测 pydantic-settings 可装性后定，见上节）
+- [ ] Python 静态检查/格式化工具选型（ruff 为 Rust 二进制，Termux 大概率装不上；备选纯 Python 的 black+isort+flake8）
 - [ ] LLM 提供方选型（用户调研中）
 - [ ] STT 选型
 - [ ] Embedding 本地模型实测（CPU 占用是否可接受，决定本地优先还是 Cloudflare 优先）

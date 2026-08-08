@@ -17,8 +17,8 @@ def _load_lib() -> ctypes.CDLL | None:
         return None
     try:
         lib = ctypes.CDLL(str(_LIB_FILE))
-        lib.aris_demo_add.restype = ctypes.c_int64
-        lib.aris_demo_add.argtypes = [ctypes.c_int64, ctypes.c_int64]
+        lib.ArisDemoAdd.restype = ctypes.c_int64
+        lib.ArisDemoAdd.argtypes = [ctypes.c_int64, ctypes.c_int64]
         return lib
     except OSError:
         return None
@@ -36,4 +36,4 @@ def demo_add(a: int, b: int) -> int:
     """调用 C 示例函数；未编译时降级为 Python 计算。"""
     if _lib is None:
         return a + b
-    return int(_lib.aris_demo_add(a, b))
+    return int(_lib.ArisDemoAdd(a, b))

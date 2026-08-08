@@ -7,17 +7,18 @@
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - src/aris/：cli.py（doctor 子命令）、config.py（pydantic-settings）、logging.py（loguru）、
   模块占位（core / memory / voice / behavior，无 persona）、csrc（demo.c + ctypes 加载）
-- 文档：PROJECT-PLAN.md（Embedding 本地优先 + Cloudflare 备选、persona 搁置）、
-  AGENTS.md（会话启动确认 Embedding 方案）、参考文档同步
-- git 首次提交 aedd66b「feat: 搭建 aris 项目骨架」
+- 文档：PROJECT-PLAN.md（Embedding 本地优先 + Cloudflare 备选、persona 搁置、
+  配置系统分级方案）、AGENTS.md（会话启动确认 Embedding 方案）、参考文档同步
+- git：aedd66b「feat: 搭建 aris 项目骨架」、03c119b「docs: 添加进度报告并清理构建产物」
+- egg-info 误提交已清理（.gitignore 已补 *.egg-info/）
+- C 扩展 demo.so 编译成功（cc 无报错）
 
 ## 当前阻塞
 
 - [ ] 依赖安装：Termux（aarch64-android，Python 3.14）无 pydantic-core 预编译 wheel，
       源码构建需 Rust（不可行）；Termux 仓库无 python-pydantic（已实测）
-- [ ] 配置系统方案待定：标准库实现 / PC 端 pydantic-settings / C 模拟（不推荐）
-- [ ] C 扩展未编译（cc 命令待重试，此前输入有误）
-- [ ] 清理：src/aris.egg-info/ 误提交进 git，待 `git rm -r --cached` + .gitignore 已补 *.egg-info/
+- [ ] 配置系统方案待定：分级备选 = pydantic-settings（PC 可装时）→ 标准库实现 →
+      C 模拟（最后备选，不推荐），等用户 PC 实测后定案
 
 ## 待定决策
 
@@ -29,7 +30,6 @@
 
 ## 下一步
 
-1. 配置系统定案
-2. 清理 egg-info（git rm --cached）
-3. uv sync + aris doctor 跑通
-4. PC 上验证 pydantic-settings 可装性
+1. 配置系统定案（PC 实测 pydantic-settings）
+2. uv sync + aris doctor 跑通
+3. 接入 LLM（等选型确定）

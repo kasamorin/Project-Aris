@@ -35,7 +35,7 @@ cc -shared -fPIC -O2 -o src/aris/csrc/demo.so src/aris/csrc/demo.c
 ```
 src/aris/
 ├── cli.py        # CLI 入口（子命令式）
-├── config.py     # pydantic-settings 配置（ARIS_ 前缀，.env 读取）
+├── config.py     # 全局配置（ARIS_ 前缀，.env 读取；实现方案见 PROJECT-PLAN.md）
 ├── logging.py    # loguru 统一日志
 ├── csrc/         # C 扩展（ctypes 按需加载）
 ├── core/         # Agent 核心 + LLM 连接（提供方抽象，占位）

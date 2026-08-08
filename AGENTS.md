@@ -16,7 +16,8 @@
 ## 现状
 
 - 骨架已搭（2026-08）：pyproject.toml + src/aris/（config/logging/cli + 模块占位 + csrc）。
-- 下一步：用户手动 `uv sync` 后接入 LLM（等选型确定）。
+  `uv sync` 在 Termux 被 pydantic-core 阻塞（无 wheel、需 Rust），配置系统方案待定。
+- 下一步：配置系统定案 → uv sync 跑通 → 接入 LLM（等选型确定）。
 - 人格模块（persona）已搁置：实现方式未定（提示词工程 vs MCP）。
 - 状态权威来源：
   - `CODING-GUIDELINES.md` —— 编码原则与哲学（必须遵守）
@@ -35,11 +36,12 @@
 
 - Python：最低 3.12，开发按 3.14
 - 依赖管理：uv；包布局 src 布局，包名 `aris`
-- 配置：pydantic-settings + .env，API key 放 env 由用户填写
+- 配置：pydantic-settings 优先，**方案待定**（Termux 无法安装 pydantic-core，分级备选见 PROJECT-PLAN.md「配置系统方案」；未定案前不改 config.py）
 - 日志：loguru；测试：pytest（待确认）
 
 ## 待定（勿替用户做决定）
 
+- 配置系统方案（PC 实测 pydantic-settings 可装性后定，见 PROJECT-PLAN.md）
 - LLM 提供方：用户正在调研选型，**不要接入/实现任何 LLM 连接**，直到用户确定
 - Embedding 方案：本地（Bekko）vs Cloudflare BGE-M3，会话启动时确认；本地待用户实测 CPU 占用
 - STT 选型、人格系统实现方式（提示词工程 vs MCP，persona 模块已搁置）

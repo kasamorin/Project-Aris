@@ -12,10 +12,25 @@
 ### 语言
 - 变量/函数/类名一律使用英文
 - 注释一律使用中文
+- 模块/函数/类的 docstring 一律使用中文
+
+### 代码风格
+- 行宽限制 100 列
+- 类型标注（type hints）尽量多标注：所有公开函数/类标注完整类型
+- C 代码用 clang-format 格式化（仓库根 `.clang-format`，行宽 100）
+- C 命名规范：
+  - 函数：大驼峰（`ArisDemoAdd`）
+  - 变量：小驼峰（`userCount`）
+  - 指针声明：星号靠变量（`int *p`）
+  - 常量/宏：UPPER_SNAKE_CASE（`MAX_BUFFER_SIZE`）
+- Python 静态检查/格式化工具：**待定**（候选：ruff / black+isort+flake8，需考虑 Termux 可装性），定案前不引入
 
 ### Git 提交规范
-- 使用 Conventional Commits 格式（`feat:` / `fix:` / `docs:` / `refactor:` 等前缀）
-- 提交内容具体描述用中文，例如：`feat: 添加登录功能`
+- 使用 Conventional Commits 完整格式（head + body）：
+  - head：前缀 + 简短中文描述，如 `feat: 添加登录功能`
+  - body：换行后用中文写清改动动机与要点（为什么改、改了什么）
+- 改动极小（body 无内容可写）时可省略 body，但 head 必须符合格式
+- 分支策略：feature 分支开发，合并后删除；每提交保持小粒度（一件事一个提交）
 
 ### 歧义处理
 - 遇到不确定的需求或歧义，先停下来问用户确认，绝不擅自假设
