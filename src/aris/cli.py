@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     settings = get_settings()
-    setup_logging(settings.log_level)
+    setup_logging(settings.log_level, settings.data_dir)
 
     if args.command is None:
         parser.print_help()
