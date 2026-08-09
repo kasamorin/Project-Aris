@@ -1,7 +1,9 @@
 """全屏 TUI 文字对话界面（aris chat 交互模式）。
 
-布局：上方只读输出区（对话记录 + 流式回复，自动滚动），底部单行输入框。
+布局：上方只读输出区（对话记录 + 流式回复，自动滚动），底部输入框。
 交互规则：
+- Enter 发送消息，Shift+Enter 换行（输入框支持多行）
+- 上下方向键回看/复用历史输入（光标在首行/末行时触发）
 - Aris 回复期间输入框只读（禁止输入文本），可按两次 ESC 中断回复
 - 第一次按 ESC 提示「再按一次」，短时间（0.8s）内再按才真正中断
 - Ctrl-C 退出程序
@@ -19,6 +21,8 @@ import time
 from prompt_toolkit.application import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
+from prompt_toolkit.filters import in_paste_mode
+from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.defaults import load_key_bindings
 from prompt_toolkit.layout.containers import HSplit
@@ -26,7 +30,7 @@ from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.widgets import TextArea
 
-from .commands import COMMAND_HELP, PROMPT_ARIS, PROMPT_USER, parse_command
+from .commands import PROMPT_ARIS, PROMPT_USER, parse_command
 from .session import ChatSession
 
 # 两次 ESC 间隔在此值（秒）内视为双击中断
@@ -53,10 +57,11 @@ class ChatTUI:
             height=Dimension(weight=1),
         )
         self.input_area = TextArea(
-            multiline=False,
+            multiline=True,
             prompt=PROMPT_USER,
             accept_handler=self._on_accept,
-            height=Dimension.exact(1),
+            history=InMemoryHistory(),
+            height=Dimension(preferred=1, max=5),
         )
         self._output_text = ""
         self._append_output("开始与 Aris 对话（输入 /help 查看指令，ESC 两次中断回复，Ctrl-C 退出）\n")
@@ -89,6 +94,23 @@ class ChatTUI:
         def _exit(_event) -> None:
             self.app.exit()
 
+        # Enter 发送（默认多行模式下 Enter 是换行，需覆盖为发送）
+        # ~in_paste_mode：粘贴多行文本时让默认绑定把换行当文本插入，不误发送
+        @kb.add("enter", filter=~in_paste_mode)
+        def _send(_event) -> None:
+            _event.current_buffer.validate_and_handle()
+
+        # Shift+Enter 换行：终端需支持 CSI-u 扩展（kitty/wezterm/foot 等），
+        # 序列为 ESC[13;2u；不支持 CSI-u 的终端该键与 Enter 无法区分
+        @kb.add("escape", "[", "1", "3", ";", "2", "u")
+        def _shift_enter(event) -> None:
+            event.current_buffer.insert_text("\n")
+
+        # Alt+Enter 换行：CSI-u 不支持时的兜底
+        @kb.add("escape", "c-m")
+        def _alt_enter(event) -> None:
+            event.current_buffer.insert_text("\n")
+
         @kb.add("escape")
         def _esc(_event) -> None:
             if not self._generating:
@@ -105,24 +127,39 @@ class ChatTUI:
 
     # --- 发送消息 ---
     def _on_accept(self, buffer: Buffer) -> bool:
-        """Enter 时触发：发送消息或执行指令。"""
+        """Enter 时触发：发送消息或执行指令。
+
+        返回 False：让 validate_and_handle 在 accept_handler 执行后
+        自动清空输入框并写入历史。
+        """
         if self._generating:
-            return True
+            return False
         text = buffer.text.strip()
         if not text:
-            return True
-        if text in {"/quit", "/exit"}:
-            self.app.exit()
-            return True
-        help_text = parse_command(text)
-        if help_text:
-            buffer.reset()
-            self._append_output(f"{PROMPT_USER}{text}\n{help_text}\n")
-            return True
-        buffer.reset()
+            return False
+        parsed = parse_command(text)
+        if parsed is not None:
+            result = self.session.run_command(parsed)
+            self._append_output(f"{PROMPT_USER}{text}\n")
+            if result.quit:
+                self.app.exit()
+                return False
+            if result.clear:
+                self._clear_output()
+            if result.text:
+                self._append_output(f"{result.text}\n")
+            return False
         self._append_output(f"{PROMPT_USER}{text}\n")
         self._start_generation(text)
-        return True
+        return False
+
+    def _clear_output(self) -> None:
+        """清空输出区（仅视觉，不影响对话历史）。"""
+        self._output_text = ""
+        self.output_area.buffer.set_document(
+            Document(text="", cursor_position=0),
+            bypass_readonly=True,
+        )
     def _start_generation(self, text: str) -> None:
         self._generating = True
         self.input_area.read_only = True

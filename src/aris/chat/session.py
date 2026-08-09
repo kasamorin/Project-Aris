@@ -11,10 +11,17 @@ import os
 import select
 import sys
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
 from ..core.llm import ChatRequest, LLMEngine, Message
-from .commands import COMMAND_HELP, PROMPT_ARIS, PROMPT_USER, parse_command
+from .commands import (
+    COMMAND_HELP,
+    PROMPT_ARIS,
+    PROMPT_USER,
+    ParsedCommand,
+    parse_command,
+)
 
 # 简单 Aris 人设（persona 模块已搁置，此处仅作为对话 CLI 的默认系统提示词）
 ARIS_SYSTEM_PROMPT = (
@@ -25,6 +32,15 @@ ARIS_SYSTEM_PROMPT = (
 
 # 单个对话日志文件大小上限（超出后新建 chat.log.1、chat.log.2 ...）
 _CHAT_LOG_ROTATION = 10 * 1024 * 1024
+
+
+@dataclass
+class CommandResult:
+    """指令执行结果：反馈文本 + UI 动作标记（退出 / 清屏）。"""
+
+    text: str = ""
+    quit: bool = False
+    clear: bool = False
 
 
 def _chat_log_path(log_dir: Path) -> Path:
@@ -72,10 +88,42 @@ class ChatSession:
     ) -> None:
         self.engine = engine
         self.model_id = model_id
+        self._system_prompt = system_prompt
+        self.available_models = engine.providers.all_model_ids()
         self.history: list[Message] = [Message(role="system", content=system_prompt)]
         log_dir = data_dir / "logs" / datetime.date.today().isoformat()
         log_dir.mkdir(parents=True, exist_ok=True)
         self._log_dir = log_dir
+
+    def new(self) -> str:
+        """清空对话历史，开启新会话（保留系统提示词），返回反馈文本。"""
+        self.history = [Message(role="system", content=self._system_prompt)]
+        return "已开启新会话，对话历史已清空。"
+
+    def set_model(self, model_id: str) -> str:
+        """切换模型；id 不在可用列表时返回错误文本，不切换。"""
+        if model_id in self.available_models:
+            self.model_id = model_id
+            return f"已切换模型：{model_id}"
+        hint = "\n".join(f"  {mid}" for mid in self.available_models)
+        return f"未知模型 {model_id}，可用模型：\n{hint}"
+
+    def run_command(self, parsed: ParsedCommand) -> CommandResult:
+        """执行一条已解析的对话指令，返回 UI 层需要的结果。"""
+        if parsed.name in {"quit", "exit"}:
+            return CommandResult(text="", quit=True)
+        if parsed.name == "help":
+            return CommandResult(text=COMMAND_HELP)
+        if parsed.name == "new":
+            return CommandResult(text=self.new())
+        if parsed.name == "clear":
+            return CommandResult(text="", clear=True)
+        if parsed.name == "model":
+            if parsed.arg:
+                return CommandResult(text=self.set_model(parsed.arg))
+            models = "\n".join(f"  {mid}" for mid in self.available_models)
+            return CommandResult(text=f"当前模型：{self.model_id}\n可用模型：\n{models}")
+        return CommandResult(text=f"未知指令 /{parsed.name}，输入 /help 查看可用指令")
 
     def ask(
         self, text: str, should_stop: Callable[[], bool] | None = None
@@ -133,11 +181,15 @@ class ChatSession:
                 break
             if not user_text:
                 continue
-            if user_text in {"/quit", "/exit"}:
-                break
-            help_text = parse_command(user_text)
-            if help_text:
-                print(help_text)
+            parsed = parse_command(user_text)
+            if parsed is not None:
+                result = self.run_command(parsed)
+                if result.quit:
+                    break
+                if result.clear:
+                    print("\n" * 3)  # 非终端没有界面可清，仅刷屏分隔
+                if result.text:
+                    print(result.text)
                 continue
             print(PROMPT_ARIS, end="", flush=True)
             for delta in self.ask(user_text):

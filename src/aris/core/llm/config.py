@@ -75,6 +75,15 @@ class ProviderConfig:
         """返回提供统一模型 id 的提供方（按尝试顺序）。"""
         return [p for p in self.ordered_providers() if p.get_model(model_id) is not None]
 
+    def all_model_ids(self) -> list[str]:
+        """返回全部提供方支持的统一模型 id（去重、按尝试顺序）。"""
+        ids: list[str] = []
+        for p in self.ordered_providers():
+            for m in p.models:
+                if m.id not in ids:
+                    ids.append(m.id)
+        return ids
+
 
 def load_providers(path: str | Path) -> ProviderConfig:
     """从 toml 文件加载提供方配置。

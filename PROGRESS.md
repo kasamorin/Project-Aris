@@ -24,6 +24,11 @@
     `--verbose` 显示 INFO（对话日志全量落文件）
   - **模块重构（2026-08-09）**：独立为 `chat/` 包（`session.py` 会话 + `tui.py` 全屏界面 +
     `commands.py` 指令），`/help` 查看可用指令；TUI 支持 ESC 两次中断回复、Ctrl-C 退出
+  - **交互补全（2026-08-09）**：多行输入（Enter 发送，Shift+Enter 换行——需终端支持
+    CSI-u 扩展，kitty/wezterm/foot 等；不支持时 Alt+Enter 换行兜底）；上下方向键回看
+    输入历史；新增指令 `/clear`（清屏）、`/new`（清空历史重开会话）、`/model [id]`
+    （查看/切换模型）；指令统一由 `session.run_command` 分发（返回文本+quit/clear 标记），
+    TUI 与非 TTY 回退共用；`core/llm/config.py` 新增 `ProviderConfig.all_model_ids()`
 - **OpenCode Zen 免费模型接入（2026-08-09）**：8 个免费模型（`*-free`、`big-pickle`）
   全部走 `/chat/completions`（已实测 + `/models` 接口核实），加入 `providers.toml`
 - **日志结构升级（2026-08-09）**：按天文件夹 + 大小轮转——`data/logs/YYYY-MM-DD/`
