@@ -22,4 +22,7 @@
     * MCP服务器
     * Skills
     * 插件
+    * 联网搜索
+      * Google & Bing 优先
+      * Tavily 备选
 
