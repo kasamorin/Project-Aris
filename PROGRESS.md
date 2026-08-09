@@ -1,6 +1,6 @@
 # 开发进度报告
 
-更新于：2026-08-08（Termux 会话）
+更新于：2026-08-09（Arch Linux 会话）
 
 ## 已完成
 
@@ -16,24 +16,25 @@
   b832bdb「docs: 更新配置分级方案与编码规范，统一 C 命名」
 - egg-info 误提交已清理（.gitignore 已补 *.egg-info/）
 - C 扩展 demo.so 编译成功（cc 无报错；函数名 ArisDemoAdd 已同步重编译）
+- **配置系统定案（2026-08-09，Arch Linux）**：pydantic-settings。Arch 上
+  `uv sync` 跑通（pydantic-settings 2.15.0 / pydantic 2.13.4 / Python 3.14.6），
+  `aris doctor` 自检通过
 
 ## 当前阻塞
 
-- [ ] 依赖安装：Termux（aarch64-android，Python 3.14）无 pydantic-core 预编译 wheel，
-      源码构建需 Rust（不可行）；Termux 仓库无 python-pydantic（已实测）
-- [ ] 配置系统方案待定：分级备选 = pydantic-settings（PC 可装时）→ 标准库实现 →
-      C 模拟（最后备选，不推荐），等用户 PC 实测后定案
+- [ ] LLM 提供方选型中（用户调研中），选型确定前不实现 LLM 连接
 
 ## 待定决策
 
-- 配置系统实现（等 PC 实测 pydantic-settings 可装性后定）
 - LLM 提供方（用户调研中）
 - STT 选型
-- Embedding 本地实测（CPU 占用是否可接受）
+- Embedding 本地实测（CPU 占用是否可接受；当前按「未定」处理）
 - persona 实现方式（提示词工程 vs MCP，模块已搁置）
+- Python 静态检查/格式化工具（ruff vs black+isort+flake8）
+- 测试框架是否启用 pytest
 
 ## 下一步
 
-1. 配置系统定案（PC 实测 pydantic-settings）
-2. uv sync + aris doctor 跑通
-3. 接入 LLM（等选型确定）
+1. 接入 LLM（等选型确定）
+2. 跑通文字对话
+3. 记忆系统（PostgreSQL + pgvector）

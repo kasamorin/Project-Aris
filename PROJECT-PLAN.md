@@ -19,24 +19,29 @@
 | 编程语言 | Python 为主 | C 语言辅助（性能敏感处），必要时 TypeScript |
 | Python 版本 | 开发按 3.14，最低支持 3.12 | 尽量用新特性 |
 | 依赖管理 | uv | 锁文件，Termux 可用 |
-| 配置系统 | pydantic-settings 优先，按环境分级 | `.env` + 环境变量，API key 一律放 env；备选方案见下方「配置系统方案」 |
+| 配置系统 | pydantic-settings（已定案） | `.env` + 环境变量，API key 一律放 env；Termux 暂不可装，见下方「配置系统方案」 |
 | 日志 | loguru | 统一日志方案 |
 | 包布局 | src 布局 | 包名 `aris`，`src/aris/` |
 | 测试 | pytest（待确认） | 骨架阶段暂不强制 |
 
-## 配置系统方案（2026-08，待定）
+## 配置系统方案（2026-08，已定案）
 
 背景：Termux（aarch64-android，Python 3.14）无 pydantic-core 预编译 wheel，源码构建
 需 Rust（不可行），Termux 仓库亦无 python-pydantic 包（已实测）→ pydantic-settings
-在 Termux 无法安装。按环境分级：
+在 Termux 无法安装。分级方案：
 
-1. **第一选择**：pydantic-settings（PC / Linux 桌面可装时）
+1. **第一选择**：pydantic-settings（PC / Linux 桌面可装）
 2. **第二选择**：标准库实现（dataclass + 手写 .env 解析，约 30 行，零依赖，两平台通吃）
 3. **最后备选（野路子）**：C 语言模拟配置解析（ctypes 接入，不推荐：文本解析用 C
    违背 KISS，增加编译依赖，可维护性差）
 
-定案方式：用户到 PC 上实测 pydantic-settings 可装性后决定；在此之前 config.py
-保持现状不重写。
+**定案（2026-08-09，Arch Linux 实测）**：选第一选择 pydantic-settings。Arch 上
+`uv sync` 已跑通（pydantic-settings 2.15.0 / pydantic 2.13.4 / Python 3.14.6）。
+Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为必要运行环境，
+再评估第二选择（届时 pydantic-settings 分支迁移成本低，见下注）。
+
+> 注：config.py 的字段只依赖 `BaseSettings` 的简单 env 读取语义，若未来迁移到
+> 标准库实现，仅需重写 `Settings` 类的读取逻辑，调用方（`get_settings()`）不变。
 
 ## 模块划分（对应 Project-Aris.md）
 
@@ -70,7 +75,6 @@
 
 ## 待定事项
 
-- [ ] 配置系统方案（用户 PC 实测 pydantic-settings 可装性后定，见上节）
 - [ ] Python 静态检查/格式化工具选型（ruff 为 Rust 二进制，Termux 大概率装不上；备选纯 Python 的 black+isort+flake8）
 - [ ] LLM 提供方选型（用户调研中）
 - [ ] STT 选型
