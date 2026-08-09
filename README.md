@@ -54,4 +54,4 @@ src/aris/
 
 ## 决策记录
 
-技术决策与待定事项见 `PROJECT-PLAN.md`，编码规范见 `CODING-GUIDELINES.md`。
+技术决策与待定事项见 `PROJECT-PLAN.md`，通用要求（编码规范等）见 `AGENTS.md`。

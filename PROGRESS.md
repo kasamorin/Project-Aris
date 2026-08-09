@@ -29,11 +29,13 @@
 
 ## 当前阻塞
 
-- [ ] LLM 提供方选型中（用户调研中），选型确定前不实现 LLM 连接
+- [ ] LLM 提供方式与提供方选型中（用户调研中；候选 v1/chat、v1/responses、Anthropic
+  格式等，可能多提供方、多模型 fallback），选型确定前不实现 LLM 连接
 
 ## 待定决策
 
-- LLM 提供方（用户调研中）
+- LLM 提供方式与提供方（用户调研中）
+- 记忆架构（三层记忆模型，构想中、未完善，可能换）
 - STT 选型
 - persona 实现方式（提示词工程 vs MCP，模块已搁置）
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）

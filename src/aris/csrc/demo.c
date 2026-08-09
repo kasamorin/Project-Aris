@@ -1,6 +1,6 @@
 /* Aris C 扩展最小示例（占位）。
  *
- * 命名规范（见 CODING-GUIDELINES.md）：
+ * 命名规范（见 AGENTS.md）：
  *   函数：大驼峰（ArisDemoAdd）；变量：小驼峰（userCount）；
  *   指针声明：星号靠变量（int *p）；常量/宏：UPPER_SNAKE_CASE。
  * 编译（Termux / Linux 均可用 cc）：

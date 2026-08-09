@@ -1,6 +1,6 @@
 # Project-Aris 项目规划与决策
 
-本文档记录项目立项以来的关键决策，是开发的权威依据。编码相关要求见 [CODING-GUIDELINES.md](./CODING-GUIDELINES.md)。
+本文档记录项目立项以来的关键决策，是开发的权威依据。编码相关要求见 [AGENTS.md](./AGENTS.md)。
 
 ## 项目定位
 
@@ -9,8 +9,8 @@
 
 ## 开发环境
 
-- **主开发环境**：Linux 桌面（Wayland）
-- **次环境**：Termux（安卓），代码需兼顾两边能跑
+- **主开发环境**：Arch Linux（Wayland 桌面）——默认开发环境
+- **次环境**：Termux（安卓），仅用于没有电脑时改文档，不运行代码
 
 ## 技术栈决策
 
@@ -45,21 +45,28 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 模块划分（对应 Project-Aris.md）
 
-- `core/` —— Agent 核心、LLM 连接（提供方抽象）
+- `core/` —— 基础设施：Agent 核心 + 一切外部基础连接（LLM API 等）的统一出入口（提供方抽象）
 - `memory/` —— 记忆系统：Embedding + 数据库
 - `voice/` —— STT（语音识别）、TTS（语音合成）
-- `persona/` —— **已搁置**：人格系统，实现方式未定（提示词工程 vs 现有 MCP），待用户想清楚再建
-- `behavior/` —— 行为：函数调用、MCP 服务器、Skills、插件
+- `persona/` —— **已搁置**：人格系统，实现方式未定（提示词工程 vs MCP），待用户想清楚再建
+- `behavior/` —— 行为：函数调用、连接外部 / 自建 MCP 服务器、Skills
+- 对话 CLI：单独分出来实现（如 `aris chat`），连接仍走 `core/`
+- 插件系统：**后续可能增加**——MCP 服务器可做同样的事，届时再评估是否独立成模块
 
 ## 关键技术选型
 
-- **LLM**：暂定，接口鱼龙混杂，等调研后再定；API key 由用户填 env
-- **记忆数据库**：PostgreSQL + pgvector 起步，之后再加 GraphRAG（Apache AGE 或递归 CTE）
+- **LLM**：提供方式与提供方**未定**（候选 v1/chat、v1/responses、Anthropic 格式等；
+  可能多个提供方、多个模型做 fallback），等调研后再定；API key 由用户填 env
+- **记忆数据库**：PostgreSQL + pgvector 起步，之后再加 GraphRAG（Apache AGE 或递归 CTE）；
+  表结构预留宽松，方便以后加图谱
+- **记忆实现方式**：走 RAG，但不用 LangChain/LlamaIndex 等现有框架（自研轻量实现）
 - **Embedding**：**已定案（2026-08-09）**：按记忆层级分 provider——
   热记忆本地 Bekko-embedding-v1-a25m（OpenVINO CPU，实测日常 CPU 5.3% / 延迟 10ms /
   内存 1.5GiB）；冷记忆云端 Cloudflare Workers AI BGE-M3（免费额度内近零成本，
   高负荷归档上云省本机算力）。两库维度不同（384/1024），各建独立 pgvector 表，
   详见 `referenceDocumentation/EMBEDDING.md`
+- **联网搜索（基本定案）**：Google & Bing 优先、Tavily 备选；实现方式未定
+  （大概模拟真实浏览器），实现 behavior 模块时再定
 - **TTS**：Edge TTS 起步（免费），Azure TTS 备选
 - **STT**：暂未定（参考候选：Groq Whisper / 通义听悟）
 - **交互形态**：先文字对话，后加语音
@@ -79,10 +86,13 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 待定事项
 
-- [ ] Python 静态检查/格式化工具选型（ruff 为 Rust 二进制，Termux 大概率装不上；备选纯 Python 的 black+isort+flake8）
-- [ ] LLM 提供方选型（用户调研中）
+- [ ] Python 静态检查/格式化工具选型（候选：ruff / black+isort+flake8）
+- [ ] LLM 提供方式与提供方选型（v1/chat vs v1/responses vs Anthropic 格式等；
+      可能多提供方、多模型做 fallback，用户调研中）
+- [ ] 记忆架构（三层记忆模型：感觉/短期/长期，含反思、遗忘权重、时间线冲突处理，
+      用户构想中、未完善，以后可能换）
 - [ ] STT 选型
 - [x] Embedding 本地模型实测（2026-08-09 完成：Bekko a25m 日常 CPU 5.3% / 延迟 10ms /
       内存 1.5GiB；定案按记忆层级分 provider，热记忆本地、冷记忆 Cloudflare BGE-M3）
-- [ ] 人格系统实现方式（提示词工程 vs 现有 MCP，决定是否重建 persona 模块）
+- [ ] 人格系统实现方式（提示词工程 vs MCP，决定是否重建 persona 模块）
 - [ ] 测试框架是否启用 pytest

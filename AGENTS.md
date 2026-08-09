@@ -1,49 +1,175 @@
 # AGENTS.md
 
-## 环境警告（最重要）
+本文件是项目**所有通用要求**的唯一权威来源，每个会话启动时自动阅读。
+开发具体模块时，只需按需阅读「文档索引」中的专门文档，无需再辗转其他文档获取通用要求。
 
-- 本环境（Termux）的 bash 工具**可能**卡死（超时 120s 无输出）。
-- 允许执行 bash，但规则：会话开始时（判断环境为 Termux 时）先执行一次简单命令（如 `echo ok`）测试 bash 是否可用。
+## 环境识别（会话开始第一步）
+
+- 默认开发环境：**Arch Linux（Wayland 桌面）**，bash 完全可用，一切命令（含 git）
+  可自由执行，无需特殊限制。
+- 会话开始先执行 `echo ok` 测试 bash 是否可用：
+  - 正常返回 → 执行 `fastfetch` 确认当前环境（Arch / Termux），据此按需遵守下方规则；
+    若 `fastfetch` 不可用，回退用 `uname -a`、`/etc/os-release` 等判断。
+  - 超时/卡死 → 视为 bash 不可用，直接按「Termux 注意事项」处理。
+
+### Termux 注意事项（安卓次环境）
+
+- bash 工具**可能**卡死（超时 120s 无输出）。
 - 只要任意一个 bash 命令能正常返回不超时，即可自由按需执行（包括 git）。
-- 若测试命令超时/卡死，则视为 bash 不可用：避免用 bash，尤其禁止 git 命令；需要提交时把命令与提交信息写好交给用户手动执行。
+- 若测试命令超时/卡死，则视为 bash 不可用：避免用 bash，尤其禁止 git 命令；
+  需要提交时把命令与提交信息写好交给用户手动执行。
 - 文件操作优先用 read/write/edit/glob 工具；glob 偶发失败时改用 read 目录。
 
-## 会话启动检查（每次开始工作前）
+## 项目简介
 
-- **Embedding 方案确认**：已定案（2026-08-09）：按记忆层级分 provider——
-  热记忆本地 Bekko a25m（OpenVINO CPU），冷记忆云端 Cloudflare BGE-M3；
-  两库维度不同（384/1024）各建独立 pgvector 表，详见
-  `referenceDocumentation/EMBEDDING.md`；实现 memory 模块时直接按此方案，无需再确认
+- 拟人 AI「Aris」，参考 Neuro-sama，目标是「社会学意义上的人」：长期独立人格、
+  持续演进的世界观、人际关系网和成长轨迹
+- 纯个人项目，但可维护性为最高优先级，目标运行数年
+- 开发节奏：先跑通核心链路（STT → LLM → TTS），再逐层叠加能力
+- 详细蓝图见 `referenceDocumentation/Project-Aris.md`
+
+## 开发环境
+
+- 主环境：Arch Linux（Wayland 桌面）——**默认开发环境**
+- 次环境：Termux（安卓），**仅用于没有电脑时改文档**；不运行代码，无需兼容
 
 ## 现状
 
-- 骨架已搭（2026-08）：pyproject.toml + src/aris/（config/logging/cli + 模块占位 + csrc）。
-  `uv sync` 在 Termux 被 pydantic-core 阻塞（无 wheel、需 Rust），配置系统方案待定。
-- 下一步：配置系统定案 → uv sync 跑通 → 接入 LLM（等选型确定）。
-- 人格模块（persona）已搁置：实现方式未定（提示词工程 vs MCP）。
-- 状态权威来源：
-  - `CODING-GUIDELINES.md` —— 编码原则与哲学（必须遵守）
-  - `PROJECT-PLAN.md` —— 技术决策、模块划分、路线图、待定事项
-  - `PROGRESS.md` —— 开发进度报告（当前阻塞、待定决策、下一步）
-  - `referenceDocumentation/` —— 参考文档（记忆架构、语音选型、开发总览）
+- 骨架 v0.1.0 完成（uv + src 布局、pydantic-settings 配置、loguru 日志、CLI、
+  模块占位、C 扩展 demo）；配置系统已定案并在 Arch 跑通 `uv sync`。
+- 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
-## 编码约定（摘要，详见 CODING-GUIDELINES.md）
+## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
 
-- 标识符英文，注释中文；docstring 中文；行宽 100；类型标注尽量多
-- Git 提交：Conventional Commits 完整格式（head + body），中文内容（如 `feat: 添加登录功能`）
-- C 命名：函数大驼峰、变量小驼峰、指针星号靠变量
-- KISS：一个东西只做一件事
-- 遇到歧义/不确定需求：先问用户，不擅自假设
+### 注释
+- 介于「关键逻辑写注释」与「详细注释」之间
+- 复杂算法、业务逻辑、易误解处尽量写清楚注释
+- 简单代码不写废话注释
+
+### 语言
+- 变量/函数/类名一律使用英文
+- 注释一律使用中文
+- 模块/函数/类的 docstring 一律使用中文
+
+### 代码风格
+- 行宽限制 100 列
+- 类型标注（type hints）尽量多标注：所有公开函数/类标注完整类型
+- C 代码用 clang-format 格式化（仓库根 `.clang-format`，行宽 100）
+- C 命名规范：
+  - 函数：大驼峰（`ArisDemoAdd`）
+  - 变量：小驼峰（`userCount`）
+  - 指针声明：星号靠变量（`int *p`）
+  - 常量/宏：UPPER_SNAKE_CASE（`MAX_BUFFER_SIZE`）
+- Python 静态检查/格式化工具：**待定**（候选：ruff / black+isort+flake8），定案前不引入
+
+### Git 提交规范
+- 使用 Conventional Commits 完整格式（head + body）：
+  - head：前缀 + 简短中文描述，如 `feat: 添加登录功能`
+  - body：换行后用中文写清改动动机与要点（为什么改、改了什么）
+- 改动极小（body 无内容可写）时可省略 body，但 head 必须符合格式
+- 分支策略：feature 分支开发，合并后删除；每提交保持小粒度（一件事一个提交）
+
+### 歧义处理
+- 遇到不确定的需求或歧义，先停下来问用户确认，绝不擅自假设
+
+### 验证
+- 具体情况具体判断
+- 改动可能影响运行时，必须运行验证
+- 纯文本/文档改动不需要验证
+
+### 开发节奏
+- 动态平衡：先建基础模块跑通，大方向架构先定好，功能之后逐步完善
+- 不为不存在的需求设计（YAGNI），但基础架构方向要提前明确
+
+### 重构态度
+- 分层处理：
+  - 重要基础/核心模块：发现不满尽量尽早重构（越晚返工成本越高）
+  - 外围模块：记入待办，延后重构
+- 总体原则：能跑就不动，除非它开始阻碍后续开发或影响正确性
+
+### 轮子哲学
+- 按规模决定：
+  - 小功能自己写
+  - 重活（数据库、语音、LLM SDK 等）用成熟库
+
+### 错误处理
+- 分层处理但更严格：
+  - 核心逻辑：快速失败、不留脏状态，错误越早暴露越好
+  - 外围功能：宽容降级，保证不崩溃
+- 具体场景具体判断
+
+### 代码审美
+- 工程性优先：追求健壮、可维护、易调试，实用至上
+- **KISS 原则**：一个东西只做一件事，每处代码职责单一
+- 不写聪明的花活
+
+### 项目定位
+- 纯个人项目，但可维护性是最高优先级
+- 目标运行数年：模块边界清晰、命名自解释、文档跟上
+- 让几年后的自己仍能读懂每一段代码
 
 ## 技术栈（已定，勿自行更改）
 
 - Python：最低 3.12，开发按 3.14
 - 依赖管理：uv；包布局 src 布局，包名 `aris`
-- 配置：pydantic-settings（已定案，见 PROJECT-PLAN.md「配置系统方案」）；Termux 暂不可装，若需迁移见方案分级
-- 日志：loguru；测试：pytest（待确认）
+- 配置：pydantic-settings（已定案）；Termux 不运行代码（仅改文档用），
+  不存在兼容问题
+- 日志：loguru
+- 测试：pytest（待确认，骨架阶段不强制）
+
+## 数据与密钥
+
+- 运行时数据（日志、数据库文件等）统一放 `data/`，**不进 git**
+- 密钥（API key）一律放 `.env`，同样不进 git；配置读取用 `ARIS_` 前缀环境变量
+- 备份建议：定期 `rsync -av data/ /backup/aris-data/`；将来用 PostgreSQL 时用 `pg_dump`
+
+## 模块划分（对应 Project-Aris.md 蓝图）
+
+- `core/` —— 基础设施：Agent 核心 + 一切外部基础连接（LLM API 等）的统一出入口（提供方抽象）
+- `memory/` —— 记忆系统：Embedding + 数据库
+- `voice/` —— STT（语音识别）、TTS（语音合成）
+- `persona/` —— **已搁置**：人格系统，实现方式未定（提示词工程 vs MCP）
+- `behavior/` —— 行为：函数调用、连接外部 / 自建 MCP 服务器、Skills
+- 对话 CLI：单独分出来实现（如 `aris chat`），连接仍走 `core/`
+- 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
+  届时再评估是否独立成模块
+
+## 已定案（直接照做，无需再确认）
+
+- **Embedding（2026-08-09）**：按记忆层级分 provider——热记忆本地
+  Bekko a25m（OpenVINO CPU），冷记忆云端 Cloudflare BGE-M3；
+  两库维度不同（384/1024）各建独立 pgvector 表，互不混用。
+  实现 memory 模块时直接按此方案，详见 `referenceDocumentation/EMBEDDING.md`
+- **配置系统（2026-08-09）**：pydantic-settings，Arch 上 `uv sync` 已跑通
+- **记忆数据库**：PostgreSQL + pgvector 起步；表结构**预留宽松**，
+  方便以后加 GraphRAG（Apache AGE vs 递归 CTE 到时再定）
+- **记忆实现方式**：走 RAG，但**不用现有框架**（LangChain/LlamaIndex 等），
+  自研轻量实现；重量依赖安装方式（独立环境 / pyproject extras）实现时再定
+- **联网搜索（基本定案）**：Google & Bing 优先、Tavily 备选；
+  具体实现未想好（大概模拟真实浏览器），实现 behavior 模块时再定
+- **TTS**：Edge TTS 起步（免费），Azure TTS 备选
 
 ## 待定（勿替用户做决定）
 
-- LLM 提供方：用户正在调研选型，**不要接入/实现任何 LLM 连接**，直到用户确定
-- STT 选型、人格系统实现方式（提示词工程 vs MCP，persona 模块已搁置）
-- 记忆库（计划 PostgreSQL + pgvector，后加 GraphRAG）
+- LLM 提供方式与提供方：**未定**（候选 v1/chat、v1/responses、Anthropic 格式等），
+  且可能有多个提供方、多个不同模型做 fallback；选型确定前
+  **不要接入/实现任何 LLM 连接**
+- 记忆架构：三层记忆模型（感觉/短期/长期，含反思、遗忘权重、时间线冲突处理）
+  用户构想中、未完善、以后可能换
+- STT 选型（候选：Groq Whisper / 通义听悟）
+- 人格系统实现方式（提示词工程 vs MCP，persona 模块已搁置）
+- Python 静态检查/格式化工具（ruff vs black+isort+flake8）
+- 测试框架是否启用 pytest
+
+## 文档索引（按需阅读）
+
+| 开发内容 | 必读文档 |
+|---|---|
+| LLM 接入 / `core` 模块 | `referenceDocumentation/API-CALL.md` |
+| `memory` 模块（Embedding / 检索） | `referenceDocumentation/EMBEDDING.md` |
+| `voice` 模块（STT / TTS） | `referenceDocumentation/stt&&tts选型.md` |
+| 记忆架构总体（候选参考） | `referenceDocumentation/记忆数据库-bydsv4fpre.html`、`MemoryTips-bygemini.md` |
+| 开发路线总体（候选参考） | `referenceDocumentation/总览-bydsv4fpre.html` |
+| 项目蓝图 | `referenceDocumentation/Project-Aris.md` |
+| 技术决策 / 路线图 / 待定事项 | `PROJECT-PLAN.md` |
+| 开发进度（每次开发前先读） | `PROGRESS.md` |

@@ -42,9 +42,10 @@
 
 ---
 
-## 2. OpenAI Chat Completions（Aris 主路线）
+## 2. OpenAI Chat Completions（格式参考：候选之一）
 
-> 你当前的提供方（DeepSeek）走的就是这个格式。以下字段对两家通用。
+> DeepSeek 原生兼容的就是这个格式（Aris 的 LLM 提供方式与提供方选型未定，
+> 此处仅作格式参考）。以下字段对兼容该格式的各家通用。
 
 ### 2.1 基础请求
 
@@ -667,7 +668,8 @@ resp2 = client.messages.create(model=..., messages=messages, tools=tools)
 
 ## 6. 对 Aris 提供方抽象的设计建议
 
-1. **抽象层基于 OpenAI Chat Completions 格式**：与当前 DeepSeek 完全对齐，字段最成熟。
+1. **候选方案一：抽象层基于 OpenAI Chat Completions 格式**（字段最成熟，DeepSeek 原生兼容）。
+   最终选哪种格式（v1/chat vs v1/responses vs Anthropic 等）未定，见 AGENTS.md。
 2. 统一归一化三层差异：
    - 工具定义 → 内部统一 `{name, description, parameters}`
    - 模型返回 → 统一成 `{call_id, name, arguments(dict)}`
