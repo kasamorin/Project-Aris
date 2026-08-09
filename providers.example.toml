@@ -1,0 +1,21 @@
+# Aris LLM 提供方配置示例
+# 复制为 providers.toml 后按需填写（providers.toml 不进 git，避免提交你的账号信息）
+
+# 默认尝试顺序：写在此列表里的提供方优先，未写到的按文件出现顺序补齐
+default_provider_order = ["deepseek"]
+
+# 每个提供方一个 [[providers.provider]] 条目
+[[providers.provider]]
+id = "deepseek"
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"   # 对应 .env 里的环境变量名
+timeout = 30                        # 单次请求超时（秒）
+transport = "sdk"                   # sdk（openai SDK）/ httpx（手写请求）
+
+  # 该提供方下的模型列表
+  [[providers.provider.models]]
+  id = "deepseek-v4-flash"          # 统一模型 id（跨提供方 fallback 匹配用）
+  name = "DeepSeek V4 Flash"        # 显示名
+  request_name = "deepseek-v4-flash" # 实际请求时用的模型名
+  formats = ["chat"]                # 支持的格式（当前仅 chat）

@@ -12,6 +12,9 @@ __pycache__/
 # 环境变量（密钥，永不入库）
 .env
 
+# LLM 提供方配置（含用户账号信息，模板见 providers.example.toml）
+providers.toml
+
 # 运行时数据（不进 git，备份见 README「数据与备份」）
 data/
 

@@ -4,37 +4,31 @@
 
 ## 已完成
 
-- **Embedding 定案（2026-08-09）**：按记忆层级分 provider——
-  热记忆本地 Bekko-embedding-v1-a25m（OpenVINO CPU），冷记忆云端 Cloudflare BGE-M3。
-  本地实测：日常稀疏检索（每 3s 一条）平均 CPU 5.3%、单条延迟 10.4ms、内存 1.5GiB；
-  连续压力 60s 约 1164%（约 12 核满载，对应冷记忆批量归档这类高负荷任务，上云承担）。
-  Cloudflare BGE-M3 免费额度每天 10,000 Neurons（embedding 每次 1-5 Neurons，
-  个人项目近零成本）；两库维度不同（384/1024）各建独立 pgvector 表。
-  调用细节与抽象设计见 `developDoc/EMBEDDING.md`。
+- **LLM 连接层（2026-08-09）**：`core/llm` 模块落地并跑通流式对话。
+  - LLM 选型定案：多提供方抽象 + fallback，本次实现 OpenAI Chat Completions 格式
+  - 统一请求模板（Message / ChatRequest）+ formatters 按 format 翻译请求体
+  - 双传输：openai SDK（默认） + httpx 手写（SSE），从一开始就流式（TTS 增量需要）
+  - fallback：报错即切下家；总体超时预算（默认 30s，含切换耗时）耗尽则进错误处理
+  - 错误处理：不暴露原始报错，返回预设提示语 + 错误广播（桌面弹窗 + 推送注册接口）
+  - 配置：`providers.toml`（toml 定义 provider/模型结构，不进 git）+ `.env` 放密钥
+  - 验证：`aris llm test` 子命令流式实测；本地 mock 验证 sdk/httpx/fallback/超时四链路
+  - **bug 修复**：pydantic-settings 读 .env 不注入 os.environ，`transport._api_key`
+    改为经 `config._load_env_into_environ()` 同步后再读，CLI 跑通
+- **OpenCode Zen 免费模型接入（2026-08-09）**：8 个免费模型（`*-free`、`big-pickle`）
+  全部走 `/chat/completions`（已实测 + `/models` 接口核实），加入 `providers.toml`
+- **Embedding 定案（2026-08-09）**：热记忆本地 Bekko a25m（OpenVINO CPU），冷记忆
+  云端 Cloudflare BGE-M3；两库维度不同（384/1024）各建独立 pgvector 表。详见
+  `developDoc/EMBEDDING.md`
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
-- src/aris/：cli.py（doctor 子命令）、config.py（pydantic-settings）、logging.py（loguru）、
-  模块占位（core / memory / voice / behavior，无 persona）、csrc（demo.c + ctypes 加载）
-- 文档：AGENTS.md（已定案：Embedding 分层方案、persona 搁置、配置系统分级方案、
-  编码规范等）、参考文档同步
-- 编码规范定案：行宽 100、类型标注尽量多、docstring 中文、C 命名规范
-  （函数大驼峰/变量小驼峰/指针 *p）、Git 完整格式（head+body）、feature 分支、
-  .clang-format 配置（已提交）
-- git：aedd66b「feat: 搭建 aris 项目骨架」、03c119b「docs: 添加进度报告并清理构建产物」、
-  b832bdb「docs: 更新配置分级方案与编码规范，统一 C 命名」
-- egg-info 误提交已清理（.gitignore 已补 *.egg-info/）
-- C 扩展 demo.so 编译成功（cc 无报错；函数名 ArisDemoAdd 已同步重编译）
-- **配置系统定案（2026-08-09，Arch Linux）**：pydantic-settings。Arch 上
-  `uv sync` 跑通（pydantic-settings 2.15.0 / pydantic 2.13.4 / Python 3.14.6），
-  `aris doctor` 自检通过
+- 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
+- 文档：AGENTS.md、开发文档拆分、参考文档同步
 
 ## 当前阻塞
 
-- [ ] LLM 提供方式与提供方选型中（用户调研中；候选 v1/chat、v1/responses、Anthropic
-  格式等，可能多提供方、多模型 fallback），选型确定前不实现 LLM 连接
+- 无
 
 ## 待定决策
 
-- LLM 提供方式与提供方（用户调研中）
 - 记忆架构（三层记忆模型，构想中、未完善，可能换）
 - STT 选型
 - persona 实现方式（提示词工程 vs MCP，模块已搁置）
@@ -43,6 +37,13 @@
 
 ## 下一步
 
-1. 接入 LLM（等选型确定）
-2. 跑通文字对话
-3. 记忆系统（PostgreSQL + pgvector）
+1. 跑通文字对话（CLI 交互循环，基于 core/llm）
+2. 记忆系统（PostgreSQL + pgvector）
+3. 语音链路（STT → LLM → TTS）
+4. 行为扩展（函数调用 / MCP 服务器 / Skills）
+
+## 专项优化（暂缓）
+
+- **/models 动态获取模型名**：`GET {base_url}/models` 返回 `data[].id`，
+  opencode 用静态目录（Models.dev）不从该接口动态拉；Aris 后续可加
+  `fetch_models()` 免手填 providers.toml 模型名（`aris llm test --list-models`）

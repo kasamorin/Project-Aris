@@ -157,7 +157,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
-2. 接入 LLM（等选型确定）
+2. 接入 LLM —— **已完成**（2026-08-09，`core/llm`，见 PROGRESS.md）
 3. 跑通文字对话
 4. 记忆系统（PostgreSQL + pgvector）
 5. 人格系统 —— **搁置**，实现方式未定（提示词工程 vs MCP）
@@ -171,6 +171,12 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   Bekko a25m（OpenVINO CPU），冷记忆云端 Cloudflare BGE-M3；
   两库维度不同（384/1024）各建独立 pgvector 表，互不混用。
   实现 memory 模块时直接按此方案，详见 `developDoc/EMBEDDING.md`
+- **LLM 连接（2026-08-09）**：选型定案——多提供方抽象 + fallback，本次实现
+  OpenAI Chat Completions 格式（v1/chat）。统一请求模板（Message/ChatRequest）
+  + formatters 按 format 翻译；双传输（openai SDK 默认 / httpx 手写）；流式；
+  报错切下家 + 总体超时预算；错误处理返回预设提示语 + 广播（弹窗/推送接口）。
+  配置在 `providers.toml`（toml 结构 + `.env` 密钥），CLI `aris llm test` 验证。
+  详见 PROGRESS.md
 - **配置系统（2026-08-09）**：pydantic-settings，Arch 上 `uv sync` 已跑通
 - **记忆数据库**：PostgreSQL + pgvector 起步；表结构**预留宽松**，
   方便以后加 GraphRAG（Apache AGE vs 递归 CTE 到时再定）
@@ -182,9 +188,6 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 待定（勿替用户做决定）
 
-- LLM 提供方式与提供方：**未定**（候选 v1/chat、v1/responses、Anthropic 格式等），
-  且可能有多个提供方、多个不同模型做 fallback；选型确定前
-  **不要接入/实现任何 LLM 连接**
 - 记忆架构：三层记忆模型（感觉/短期/长期，含反思、遗忘权重、时间线冲突处理）
   用户构想中、未完善、以后可能换
 - STT 选型（候选：Groq Whisper / 通义听悟）
