@@ -87,6 +87,13 @@
 
 ## 已知问题（待修）
 
+- **运行 `aris chat` 偶发 Node.js EPIPE 崩溃（2026-08-09）**：报错
+  `node:events:487 throw er; Error: write EPIPE`（Node v24.18.1），
+  发生在 `uv run aris chat` 启动时。疑似与 Playwright 有关——其 driver
+  是 Node.js 进程，浏览器进程/管道异常退出时 driver 写入已关闭的管道。
+  注意 ChatSession 构造时会创建 BrowserManager（惰性，不启动），普通
+  聊天不应触发浏览器；需排查是否残留 Playwright 进程、firefox-profile
+  被锁，或浏览器相关代码在 chat 启动路径上有副作用
 - **TUI 状态行覆盖（2026-08-09）**：模型调用工具前若先输出了文字（如
   "我搜一下"），工具调用提示会把那段文字覆盖掉（`_show_tool` 直接截断
   到 `_state_start`）；且调用完输出紧跟同一行、无空格。需改为：内容已
