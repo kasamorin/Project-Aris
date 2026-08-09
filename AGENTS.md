@@ -148,7 +148,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 - `memory/` —— 记忆系统：Embedding + 数据库
 - `voice/` —— STT（语音识别）、TTS（语音合成）
 - `persona/` —— **已搁置**：人格系统，实现方式未定（提示词工程 vs MCP）
-- `behavior/` —— 行为：函数调用、连接外部 / 自建 MCP 服务器、Skills
+- `behavior/` —— 行为（函数调用已实现）：`registry.py` 工具注册表、`loop.py` agent loop
+  （LLM↔工具循环）、`tools/` 内置工具集；MCP / Skills 后续作为工具来源注册进 registry
 - `chat/` —— 文字对话（已实现）：`session.py`（会话逻辑）、`tui.py`（全屏界面）、
   `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
@@ -163,7 +164,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 4. 记忆系统（PostgreSQL + pgvector）
 5. 人格系统 —— **搁置**，实现方式未定（提示词工程 vs MCP）
 6. 语音链路（STT → LLM → TTS）
-7. 行为扩展（函数调用 / MCP 服务器 / Skills）
+7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
+   MCP / Skills / 联网搜索待后续
 8. GraphRAG
 
 ## 已定案（直接照做，无需再确认）
@@ -179,6 +181,12 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   配置在 `providers.toml`（toml 结构 + `.env` 密钥），CLI `aris llm test` 验证。
   详见 PROGRESS.md
 - **配置系统（2026-08-09）**：pydantic-settings，Arch 上 `uv sync` 已跑通
+- **工具调用（2026-08-09）**：原生 tool_calls 为主，手动 JSON 模板留作备选
+  （提取层留接缝，暂不实现）。流式 tool_calls 分片按 index 拼装，流结束发
+  「完成事件」（finish_reason + 完整 tool_calls）；agent loop 放 behavior 模块
+  （loop.py + registry.py + tools/）。Message 已补 reasoning_content/tool_calls/
+  tool_call_id（DeepSeek 带 tools 必须回传 reasoning_content 否则 400）。
+  思考模式默认关闭（`thinking: {"type":"disabled"}`，实测有效），`--thinking` 开启
 - **记忆数据库**：PostgreSQL + pgvector 起步；表结构**预留宽松**，
   方便以后加 GraphRAG（Apache AGE vs 递归 CTE 到时再定）
 - **记忆实现方式**：走 RAG，但**不用现有框架**（LangChain/LlamaIndex 等），

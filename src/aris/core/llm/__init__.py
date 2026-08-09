@@ -15,7 +15,7 @@ from .config import (
     load_providers,
 )
 from .engine import LLMEngine
-from .message import ChatRequest, Message, plain_chat
+from .message import ChatRequest, Message, ToolCall, ToolDefinition, plain_chat
 
 __all__ = [
     "LLMModel",
@@ -26,5 +26,7 @@ __all__ = [
     "LLMEngine",
     "ChatRequest",
     "Message",
+    "ToolCall",
+    "ToolDefinition",
     "plain_chat",
 ]

@@ -29,8 +29,21 @@ class LLMEngine:
         self.error_message = error_message
 
     def stream(self, request: ChatRequest) -> Iterator[str]:
-        """流式对话，按文本增量产出。"""
-        yield from (d.content for d in self._stream_deltas(request))
+        """纯文本流式：过滤掉完成事件，只产出文本增量。
+
+        适合单次问答、简单场景；需要工具调用信息时用 stream_deltas()。
+        """
+        for d in self._stream_deltas(request):
+            if d.content:
+                yield d.content
+
+    def stream_deltas(self, request: ChatRequest) -> Iterator[StreamDelta]:
+        """完整流式增量（含流结束的完成事件）。
+
+        完成事件（finish_reason 非 None）携带本轮拼好的完整 tool_calls，
+        供 behavior 的 agent loop 判断是否要执行工具并继续。
+        """
+        yield from self._stream_deltas(request)
 
     def _stream_deltas(self, request: ChatRequest) -> Iterator[StreamDelta]:
         candidates = self.providers.candidates_for(request.model_id)
@@ -54,7 +67,8 @@ class LLMEngine:
             try:
                 emitted = False
                 for delta in stream_chat(provider, request, timeout=attempt_timeout):
-                    if delta.content or delta.reasoning:
+                    # 透传文本增量 + 完成事件（content 为空但 finish_reason 有值）
+                    if delta.content or delta.reasoning or delta.finish_reason:
                         emitted = True
                         yield delta
                 return  # 该提供方完整成功，结束

@@ -35,8 +35,25 @@
   内含 `aris.log`（系统日志，loguru 10MB 轮转）与 `chat.log`（对话日志，手动 10MB 切分），
   跨天自动建新目录，仅保留 30 天
 - **Embedding 定案（2026-08-09）**：热记忆本地 Bekko a25m（OpenVINO CPU），冷记忆
-  云端 Cloudflare BGE-M3；两库维度不同（384/1024）各建独立 pgvector 表。详见
-  `developDoc/EMBEDDING.md`
+   云端 Cloudflare BGE-M3；两库维度不同（384/1024）各建独立 pgvector 表。详见
+   `developDoc/EMBEDDING.md`
+- **函数调用跑通（2026-08-09）**：原生 tool_calls + agent loop。
+  - `Message` 扩展：`tool_calls`/`tool_call_id`/`reasoning_content`（DeepSeek 带 tools
+    必须回传思考链否则 400），content 放宽 `str|None`；`ChatRequest` 加
+    `tools`/`tool_choice`/`thinking`；新增 `ToolCall`（arguments 归一化为 dict）与
+    `ToolDefinition`（name/description/parameters JSON Schema）
+  - 流式 tool_calls 按 index 分片拼装（SDK/httpx 两条路径），流结束发「完成事件」
+    （finish_reason + 完整 tool_calls）；`engine.stream_deltas()` 公开，`stream()`
+    保持纯文本
+  - `behavior/` 模块：`registry.py`（工具注册表，执行失败宽容降级回填给模型）、
+    `loop.py`（agent loop：请求→流式→完成事件→执行→回填→再请求，最多 8 轮）、
+    `tools/now.py`（首个内置工具）；中间轮不污染持久历史（chat.session 只收最终回答）
+  - 思考模式实测：Zen 模型默认思考（首字延迟 7s+），`thinking:{"type":"disabled"}`
+    有效关闭；chat 默认关闭思考，`--thinking` 开启
+  - 接入 chat：`session.ask` 走 agent loop，工具调用经 `on_tool` 回调显示在 TUI
+    （`[调用工具 now → ...]`）；`--no-tools` 可禁用
+  - 验证：mock 分片 tool_calls 实测完整链路；**真实模型实测**「现在几点了？」
+    正确触发 now 工具并返回准确时间（含拟人口吻）
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
@@ -52,11 +69,13 @@
 - persona 实现方式（提示词工程 vs MCP，模块已搁置）
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
 - 测试框架是否启用 pytest
+- 打断 vs 缓存输入策略（见 AGENTS.md 待定节）
 
 ## 下一步
 
 1. ~~跑通文字对话~~（已完成，`aris chat`）→ 记忆系统（PostgreSQL + pgvector）
-2. 语音链路（STT → LLM → TTS）
+2. 行为扩展续：联网搜索（Google/Bing，作为工具注册进 registry）、MCP 服务器、Skills
+3. 语音链路（STT → LLM → TTS）
 3. 行为扩展（函数调用 / MCP 服务器 / Skills）
 
 ## 专项优化（暂缓）

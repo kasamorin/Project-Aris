@@ -39,13 +39,21 @@ from .session import ChatSession
 _ESC_DOUBLE_GAP = 0.8
 
 
+class ToolNotice:
+    """工具执行通知（后台线程入队，UI 侧渲染）。"""
+
+    def __init__(self, *, name: str, result: str) -> None:
+        self.name = name
+        self.result = result
+
+
 class ChatTUI:
     """基于 prompt_toolkit 的全屏对话界面。"""
 
     def __init__(self, session: ChatSession) -> None:
         self.session = session
         self._cancel_event = threading.Event()
-        self._delta_queue: queue.Queue[str | None] = queue.Queue()
+        self._delta_queue: queue.Queue[str | ToolNotice | None] = queue.Queue()
         self._last_esc = 0.0
         self._generating = False
 
@@ -169,23 +177,35 @@ class ChatTUI:
         self.app.create_background_task(self._consume())
 
     def _generate(self, text: str) -> None:
-        """后台线程：流式生成，把增量放入队列，结束后放入 None。"""
+        """后台线程：流式生成，把增量/工具通知放入队列，结束后放入 None。"""
+
+        def _notice(name: str, result: str) -> None:
+            # on_tool 回调（本线程执行）：只入队，界面更新由 _consume 完成
+            self._delta_queue.put(ToolNotice(name=name, result=result))
+
         try:
             for delta in self.session.ask(
-                text, should_stop=lambda: self._cancel_event.is_set()
+                text,
+                should_stop=lambda: self._cancel_event.is_set(),
+                on_tool=_notice,
             ):
                 self._delta_queue.put(delta)
         finally:
             self._delta_queue.put(None)  # 结束标记
 
     async def _consume(self) -> None:
-        """UI 侧：消费队列增量，更新输出区，结束后解锁输入。"""
+        """UI 侧：消费队列，更新输出区（文本增量 / 工具通知），结束后解锁输入。"""
         loop = asyncio.get_running_loop()
         while True:
-            delta = await loop.run_in_executor(None, self._delta_queue.get)
-            if delta is None:
+            item = await loop.run_in_executor(None, self._delta_queue.get)
+            if item is None:
                 break
-            self._append_output(delta)
+            if isinstance(item, ToolNotice):
+                self._append_output(
+                    f"\n[调用工具 {item.name} → {item.result[:60]}]\n{PROMPT_ARIS}"
+                )
+            else:
+                self._append_output(item)
             self.app.invalidate()
         self._append_output("\n")
         self._generating = False

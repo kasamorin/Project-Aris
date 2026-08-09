@@ -14,6 +14,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..behavior import AgentLoop, ToolRegistry, register_builtin_tools
 from ..core.llm import ChatRequest, LLMEngine, Message
 from .commands import (
     COMMAND_HELP,
@@ -28,6 +29,11 @@ ARIS_SYSTEM_PROMPT = (
     "你是 Aris，一个拟人 AI。"
     "你说话简洁、自然、略带温度，像一个人类朋友，不用『作为AI』之类的套话。"
     "基于对话历史自然地继续交谈。"
+)
+
+# 工具可用时追加到系统提示词
+TOOLS_SYSTEM_HINT = (
+    "当需要实时信息（如当前时间、资料搜索）时使用提供的工具，使用前简单说明一句。"
 )
 
 # 单个对话日志文件大小上限（超出后新建 chat.log.1、chat.log.2 ...）
@@ -85,12 +91,24 @@ class ChatSession:
         model_id: str,
         system_prompt: str = ARIS_SYSTEM_PROMPT,
         data_dir: Path = Path("data"),
+        thinking: bool = False,
+        tools_enabled: bool = True,
+        registry: ToolRegistry | None = None,
     ) -> None:
         self.engine = engine
         self.model_id = model_id
         self._system_prompt = system_prompt
         self.available_models = engine.providers.all_model_ids()
+        self.thinking = thinking  # 默认关闭思考模式（首字更快），--thinking 开启
+        self.tools_enabled = tools_enabled
+        self.registry = registry if registry is not None else ToolRegistry()
+        if tools_enabled:
+            register_builtin_tools(self.registry)
+            system_prompt = f"{system_prompt} {TOOLS_SYSTEM_HINT}"
         self.history: list[Message] = [Message(role="system", content=system_prompt)]
+        self._loop = AgentLoop(
+            engine, registry=self.registry, model_id=model_id
+        )
         log_dir = data_dir / "logs" / datetime.date.today().isoformat()
         log_dir.mkdir(parents=True, exist_ok=True)
         self._log_dir = log_dir
@@ -104,6 +122,7 @@ class ChatSession:
         """切换模型；id 不在可用列表时返回错误文本，不切换。"""
         if model_id in self.available_models:
             self.model_id = model_id
+            self._loop.model_id = model_id
             return f"已切换模型：{model_id}"
         hint = "\n".join(f"  {mid}" for mid in self.available_models)
         return f"未知模型 {model_id}，可用模型：\n{hint}"
@@ -126,29 +145,39 @@ class ChatSession:
         return CommandResult(text=f"未知指令 /{parsed.name}，输入 /help 查看可用指令")
 
     def ask(
-        self, text: str, should_stop: Callable[[], bool] | None = None
+        self,
+        text: str,
+        should_stop: Callable[[], bool] | None = None,
+        on_tool: Callable[[str, str], None] | None = None,
     ) -> Iterator[str]:
         """发送一条用户消息，流式返回 Aris 回复。
 
-        回复完成后把该轮问答写入对话日志。若 should_stop 回调返回 True，
-        则中断本次回复并回滚未完成的 user 消息（不写入日志）。
+        走 agent loop（LLM ↔ 工具）：文本增量逐段 yield，工具调用与结果
+        经 on_tool 回调通知。回复完成后把该轮问答写入对话日志。
+        若 should_stop 回调返回 True，则中断并回滚未完成的 user 消息。
         """
         self.history.append(Message(role="user", content=text))
-        deltas: list[str] = []
         interrupted = False
-        for delta in self.engine.stream(
-            ChatRequest(model_id=self.model_id, messages=list(self.history))
+        reply = ""
+        for event in self._loop.iter_events(
+            list(self.history),
+            thinking=self.thinking,
+            should_stop=should_stop,
         ):
-            if should_stop is not None and should_stop():
+            if event.type == "delta":
+                yield event.content
+            elif event.type == "tool":
+                if on_tool is not None:
+                    on_tool(event.name, event.result)
+            elif event.type == "interrupted":
                 interrupted = True
                 break
-            deltas.append(delta)
-            yield delta
+            elif event.type == "done":
+                reply = event.content
         if interrupted:
             if self.history and self.history[-1].role == "user":
                 self.history.pop()  # 撤掉未完成轮次的用户消息
             return
-        reply = "".join(deltas)
         self.history.append(Message(role="assistant", content=reply))
         self._append_log(text, reply)
 
@@ -192,7 +221,14 @@ class ChatSession:
                     print(result.text)
                 continue
             print(PROMPT_ARIS, end="", flush=True)
-            for delta in self.ask(user_text):
+            for delta in self.ask(
+                user_text,
+                on_tool=lambda name, result: print(
+                    f"\n[调用工具 {name} → {result[:60]}]\n{PROMPT_ARIS}",
+                    end="",
+                    flush=True,
+                ),
+            ):
                 print(delta, end="", flush=True)
             print()
         return 0

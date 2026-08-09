@@ -92,6 +92,8 @@ def _cmd_chat(args: argparse.Namespace) -> int:
         model_id=args.model,
         system_prompt=args.system or ARIS_SYSTEM_PROMPT,
         data_dir=settings.data_dir,
+        thinking=args.thinking,
+        tools_enabled=not args.no_tools,
     )
     if args.message:
         print("Aris: ", end="", flush=True)
@@ -147,6 +149,16 @@ def main(argv: list[str] | None = None) -> int:
         "--system",
         default=None,
         help="自定义系统提示词（默认使用内置 Aris 人设）",
+    )
+    p_chat.add_argument(
+        "--thinking",
+        action="store_true",
+        help="开启思考模式（默认关闭，关闭时首字响应更快）",
+    )
+    p_chat.add_argument(
+        "--no-tools",
+        action="store_true",
+        help="禁用工具调用（默认开启内置工具）",
     )
     p_chat.set_defaults(func=_cmd_chat)
 
