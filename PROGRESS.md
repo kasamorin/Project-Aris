@@ -54,7 +54,8 @@
     （`[调用工具 get_current_time → ...]`）；`--no-tools` 可禁用
   - 验证：mock 分片 tool_calls 实测完整链路；**真实模型实测**「现在几点了？」
     正确触发 get_current_time 工具并返回准确时间（含拟人口吻）。工具返回结构化
-    dict（datetime/date/time/weekday），模型按需提取表达
+     dict（year/month/day/hour/minute/second/weekday 及中文/ISO 编号/时区偏移），
+     模型按需提取表达
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
@@ -75,9 +76,9 @@
 ## 下一步
 
 1. ~~跑通文字对话~~（已完成，`aris chat`）→ 记忆系统（PostgreSQL + pgvector）
-2. 行为扩展续：联网搜索（Google/Bing，作为工具注册进 registry）、MCP 服务器、Skills
+2. 行为扩展续：联网搜索（**方案已定案**：Playwright 驱动系统 Firefox + Tavily
+   兜底，首期只出搜索列表，见 AGENTS.md）、MCP 服务器、Skills
 3. 语音链路（STT → LLM → TTS）
-3. 行为扩展（函数调用 / MCP 服务器 / Skills）
 
 ## 专项优化（暂缓）
 
