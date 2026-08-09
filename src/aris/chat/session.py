@@ -230,7 +230,7 @@ class ChatSession:
             for delta in self.ask(
                 user_text,
                 on_tool=lambda name, result: print(
-                    f"\n[调用工具 {name} → {result[:60]}]\n{PROMPT_ARIS}",
+                    f"\n  [调用工具 {name} → {result[:60]}]\n",
                     end="",
                     flush=True,
                 ),

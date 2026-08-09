@@ -38,6 +38,10 @@ from .session import ChatSession
 # ≈ 真实按键间隔 + timeoutlen，故阈值需略宽
 _ESC_DOUBLE_GAP = 0.8
 
+# 盲文加载动画帧（等待首字到达时旋转，内容开始输出即消失）
+_SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+_SPINNER_INTERVAL = 0.1
+
 
 class ToolNotice:
     """工具执行通知（后台线程入队，UI 侧渲染）。"""
@@ -72,6 +76,9 @@ class ChatTUI:
             height=Dimension(preferred=1, max=5),
         )
         self._output_text = ""
+        # 盲文加载动画状态：spinner 在 _output_text 末尾旋转，首个内容 delta 到达即移除
+        self._spinner_active = False
+        self._spinner_pos = 0
         self._append_output("开始与 Aris 对话（输入 /help 查看指令，ESC 两次中断回复，Ctrl-C 退出）\n")
 
         self.app = Application(
@@ -86,14 +93,62 @@ class ChatTUI:
         # 调小该值让双击 ESC 能被及时识别
         self.app.timeoutlen = 0.2
     # --- 界面渲染 ---
-    def _append_output(self, text: str) -> None:
-        """向输出区追加文本并自动滚动到底部。"""
-        self._output_text += text
-        # bypass_readonly 允许在只读 buffer 上更新内容（输出区不允许用户编辑）
+    def _set_output_document(self) -> None:
+        """把当前 _output_text 渲染到输出区（bypass_readonly 允许写只读 buffer）。"""
         self.output_area.buffer.set_document(
             Document(text=self._output_text, cursor_position=len(self._output_text)),
             bypass_readonly=True,
         )
+
+    def _append_output(self, text: str) -> None:
+        """向输出区追加文本。
+
+        若 spinner 动画在转，则把新文本插到 spinner 之前（spinner 保持末尾），
+        避免工具通知等内容把动画顶掉。
+        """
+        if self._spinner_active:
+            self._output_text = (
+                self._output_text[: self._spinner_pos]
+                + text
+                + self._output_text[self._spinner_pos :]
+            )
+            self._spinner_pos += len(text)
+        else:
+            self._output_text += text
+        self._set_output_document()
+
+    def _start_spinner(self) -> None:
+        """在输出区末尾启动盲文加载动画（幂等）。"""
+        if self._spinner_active:
+            return
+        self._spinner_active = True
+        self._spinner_pos = len(self._output_text)
+        self._append_output(_SPINNER_FRAMES[0])  # 插入首个动画帧
+        self.app.create_background_task(self._spin())
+
+    def _stop_spinner(self) -> None:
+        """移除输出区末尾的 spinner 动画（首个内容 delta 到达时调用）。"""
+        if not self._spinner_active:
+            return
+        self._spinner_active = False
+        # 去掉末尾的 spinner 字符（上次插入的一帧）
+        self._output_text = self._output_text[: self._spinner_pos]
+        self._set_output_document()
+
+    async def _spin(self) -> None:
+        """盲文 spinner 动画循环：每帧替换末尾字符，直到 _stop_spinner。"""
+        frame = 0
+        while self._spinner_active:
+            ch = _SPINNER_FRAMES[frame % len(_SPINNER_FRAMES)]
+            self._output_text = (
+                self._output_text[: self._spinner_pos]
+                + ch
+                + self._output_text[self._spinner_pos + 1 :]
+            )
+            self._set_output_document()
+            self.app.invalidate()
+            frame += 1
+            await asyncio.sleep(_SPINNER_INTERVAL)
 
     def _build_key_bindings(self) -> KeyBindings:
         kb = KeyBindings()
@@ -163,6 +218,7 @@ class ChatTUI:
 
     def _clear_output(self) -> None:
         """清空输出区（仅视觉，不影响对话历史）。"""
+        self._stop_spinner()  # 避免残留动画帧在清屏后继续替换
         self._output_text = ""
         self.output_area.buffer.set_document(
             Document(text="", cursor_position=0),
@@ -173,6 +229,7 @@ class ChatTUI:
         self.input_area.read_only = True
         self._cancel_event.clear()
         self._append_output(PROMPT_ARIS)
+        self._start_spinner()  # 等待首字期间显示盲文加载动画
         threading.Thread(target=self._generate, args=(text,), daemon=True).start()
         self.app.create_background_task(self._consume())
 
@@ -201,12 +258,13 @@ class ChatTUI:
             if item is None:
                 break
             if isinstance(item, ToolNotice):
-                self._append_output(
-                    f"\n[调用工具 {item.name} → {item.result[:60]}]\n{PROMPT_ARIS}"
-                )
+                # 工具调用独立成行显示（不重复 Aris 提示符），spinner 继续转
+                self._append_output(f"\n  [调用工具 {item.name} → {item.result[:60]}]\n")
             else:
+                self._stop_spinner()  # 首个内容 delta：移除加载动画
                 self._append_output(item)
             self.app.invalidate()
+        self._stop_spinner()
         self._append_output("\n")
         self._generating = False
         self.input_area.read_only = False
