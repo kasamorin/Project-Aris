@@ -35,7 +35,7 @@ cc -shared -fPIC -O2 -o src/aris/csrc/demo.so src/aris/csrc/demo.c
 ```
 src/aris/
 ├── cli.py        # CLI 入口（子命令式）
-├── config.py     # 全局配置（ARIS_ 前缀，.env 读取；实现方案见 PROJECT-PLAN.md）
+├── config.py     # 全局配置（ARIS_ 前缀，.env 读取；实现方案见 AGENTS.md）
 ├── logging.py    # loguru 统一日志
 ├── csrc/         # C 扩展（ctypes 按需加载）
 ├── core/         # Agent 核心 + LLM 连接（提供方抽象，占位）
@@ -54,4 +54,4 @@ src/aris/
 
 ## 决策记录
 
-技术决策与待定事项见 `PROJECT-PLAN.md`，通用要求（编码规范等）见 `AGENTS.md`。
+技术决策、开发路线与待定事项统一见 `AGENTS.md`；模块级开发文档在 `developDoc/`。

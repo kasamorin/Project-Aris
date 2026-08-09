@@ -669,7 +669,7 @@ resp2 = client.messages.create(model=..., messages=messages, tools=tools)
 ## 6. 对 Aris 提供方抽象的设计建议
 
 1. **候选方案一：抽象层基于 OpenAI Chat Completions 格式**（字段最成熟，DeepSeek 原生兼容）。
-   最终选哪种格式（v1/chat vs v1/responses vs Anthropic 等）未定，见 AGENTS.md。
+   最终选哪种格式（v1/chat vs v1/responses vs Anthropic 等）未定，见 `../AGENTS.md`。
 2. 统一归一化三层差异：
    - 工具定义 → 内部统一 `{name, description, parameters}`
    - 模型返回 → 统一成 `{call_id, name, arguments(dict)}`

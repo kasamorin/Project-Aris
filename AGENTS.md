@@ -26,7 +26,7 @@
   持续演进的世界观、人际关系网和成长轨迹
 - 纯个人项目，但可维护性为最高优先级，目标运行数年
 - 开发节奏：先跑通核心链路（STT → LLM → TTS），再逐层叠加能力
-- 详细蓝图见 `referenceDocumentation/Project-Aris.md`
+- 详细蓝图见 `developDoc/Project-Aris.md`
 
 ## 开发环境
 
@@ -110,12 +110,31 @@
 
 ## 技术栈（已定，勿自行更改）
 
-- Python：最低 3.12，开发按 3.14
+- 编程语言：Python 为主；C 语言辅助（性能敏感处），必要时 TypeScript
+- Python：最低 3.12，开发按 3.14，尽量用新特性
 - 依赖管理：uv；包布局 src 布局，包名 `aris`
-- 配置：pydantic-settings（已定案）；Termux 不运行代码（仅改文档用），
-  不存在兼容问题
+- 配置：pydantic-settings（已定案，详见下节「配置系统方案」）
 - 日志：loguru
 - 测试：pytest（待确认，骨架阶段不强制）
+
+## 配置系统方案（2026-08，已定案）
+
+背景：Termux（aarch64-android，Python 3.14）无 pydantic-core 预编译 wheel，
+源码构建需 Rust（不可行），Termux 仓库亦无 python-pydantic 包（已实测）→
+pydantic-settings 在 Termux 无法安装。分级方案：
+
+1. **第一选择**：pydantic-settings（PC / Linux 桌面可装）
+2. **第二选择**：标准库实现（dataclass + 手写 .env 解析，约 30 行，零依赖，两平台通吃）
+3. **最后备选（野路子）**：C 语言模拟配置解析（ctypes 接入，不推荐：文本解析用 C
+   违背 KISS，增加编译依赖，可维护性差）
+
+**定案（2026-08-09，Arch Linux 实测）**：选第一选择 pydantic-settings。Arch 上
+`uv sync` 已跑通（pydantic-settings 2.15.0 / pydantic 2.13.4 / Python 3.14.6）。
+Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为必要运行环境，
+再评估第二选择（届时 pydantic-settings 分支迁移成本低，见下注）。
+
+> 注：config.py 的字段只依赖 `BaseSettings` 的简单 env 读取语义，若未来迁移到
+> 标准库实现，仅需重写 `Settings` 类的读取逻辑，调用方（`get_settings()`）不变。
 
 ## 数据与密钥
 
@@ -134,12 +153,24 @@
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
   届时再评估是否独立成模块
 
+## 开发路线（当前处于第一阶段）
+
+1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
+   - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
+2. 接入 LLM（等选型确定）
+3. 跑通文字对话
+4. 记忆系统（PostgreSQL + pgvector）
+5. 人格系统 —— **搁置**，实现方式未定（提示词工程 vs MCP）
+6. 语音链路（STT → LLM → TTS）
+7. 行为扩展（函数调用 / MCP 服务器 / Skills）
+8. GraphRAG
+
 ## 已定案（直接照做，无需再确认）
 
 - **Embedding（2026-08-09）**：按记忆层级分 provider——热记忆本地
   Bekko a25m（OpenVINO CPU），冷记忆云端 Cloudflare BGE-M3；
   两库维度不同（384/1024）各建独立 pgvector 表，互不混用。
-  实现 memory 模块时直接按此方案，详见 `referenceDocumentation/EMBEDDING.md`
+  实现 memory 模块时直接按此方案，详见 `developDoc/EMBEDDING.md`
 - **配置系统（2026-08-09）**：pydantic-settings，Arch 上 `uv sync` 已跑通
 - **记忆数据库**：PostgreSQL + pgvector 起步；表结构**预留宽松**，
   方便以后加 GraphRAG（Apache AGE vs 递归 CTE 到时再定）
@@ -165,11 +196,10 @@
 
 | 开发内容 | 必读文档 |
 |---|---|
-| LLM 接入 / `core` 模块 | `referenceDocumentation/API-CALL.md` |
-| `memory` 模块（Embedding / 检索） | `referenceDocumentation/EMBEDDING.md` |
-| `voice` 模块（STT / TTS） | `referenceDocumentation/stt&&tts选型.md` |
+| LLM 接入 / `core` 模块 | `developDoc/API-CALL.md` |
+| `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
+| `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |
+| 项目蓝图 | `developDoc/Project-Aris.md` |
 | 记忆架构总体（候选参考） | `referenceDocumentation/记忆数据库-bydsv4fpre.html`、`MemoryTips-bygemini.md` |
 | 开发路线总体（候选参考） | `referenceDocumentation/总览-bydsv4fpre.html` |
-| 项目蓝图 | `referenceDocumentation/Project-Aris.md` |
-| 技术决策 / 路线图 / 待定事项 | `PROJECT-PLAN.md` |
 | 开发进度（每次开发前先读） | `PROGRESS.md` |

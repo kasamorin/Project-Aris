@@ -10,12 +10,12 @@
   连续压力 60s 约 1164%（约 12 核满载，对应冷记忆批量归档这类高负荷任务，上云承担）。
   Cloudflare BGE-M3 免费额度每天 10,000 Neurons（embedding 每次 1-5 Neurons，
   个人项目近零成本）；两库维度不同（384/1024）各建独立 pgvector 表。
-  调用细节与抽象设计见 `referenceDocumentation/EMBEDDING.md`。
+  调用细节与抽象设计见 `developDoc/EMBEDDING.md`。
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - src/aris/：cli.py（doctor 子命令）、config.py（pydantic-settings）、logging.py（loguru）、
   模块占位（core / memory / voice / behavior，无 persona）、csrc（demo.c + ctypes 加载）
-- 文档：PROJECT-PLAN.md（Embedding 本地优先 + Cloudflare 备选、persona 搁置、
-  配置系统分级方案）、AGENTS.md（会话启动确认 Embedding 方案）、参考文档同步
+- 文档：AGENTS.md（已定案：Embedding 分层方案、persona 搁置、配置系统分级方案、
+  编码规范等）、参考文档同步
 - 编码规范定案：行宽 100、类型标注尽量多、docstring 中文、C 命名规范
   （函数大驼峰/变量小驼峰/指针 *p）、Git 完整格式（head+body）、feature 分支、
   .clang-format 配置（已提交）
