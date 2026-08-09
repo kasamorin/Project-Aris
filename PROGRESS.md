@@ -47,13 +47,14 @@
     保持纯文本
   - `behavior/` 模块：`registry.py`（工具注册表，执行失败宽容降级回填给模型）、
     `loop.py`（agent loop：请求→流式→完成事件→执行→回填→再请求，最多 8 轮）、
-    `tools/now.py`（首个内置工具）；中间轮不污染持久历史（chat.session 只收最终回答）
+    `tools/get_current_time.py`（首个内置工具）；中间轮不污染持久历史（chat.session 只收最终回答）
   - 思考模式实测：Zen 模型默认思考（首字延迟 7s+），`thinking:{"type":"disabled"}`
     有效关闭；chat 默认关闭思考，`--thinking` 开启
   - 接入 chat：`session.ask` 走 agent loop，工具调用经 `on_tool` 回调显示在 TUI
-    （`[调用工具 now → ...]`）；`--no-tools` 可禁用
+    （`[调用工具 get_current_time → ...]`）；`--no-tools` 可禁用
   - 验证：mock 分片 tool_calls 实测完整链路；**真实模型实测**「现在几点了？」
-    正确触发 now 工具并返回准确时间（含拟人口吻）
+    正确触发 get_current_time 工具并返回准确时间（含拟人口吻）。工具返回结构化
+    dict（datetime/date/time/weekday），模型按需提取表达
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
