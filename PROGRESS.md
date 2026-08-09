@@ -4,6 +4,13 @@
 
 ## 已完成
 
+- **Embedding 定案（2026-08-09）**：按记忆层级分 provider——
+  热记忆本地 Bekko-embedding-v1-a25m（OpenVINO CPU），冷记忆云端 Cloudflare BGE-M3。
+  本地实测：日常稀疏检索（每 3s 一条）平均 CPU 5.3%、单条延迟 10.4ms、内存 1.5GiB；
+  连续压力 60s 约 1164%（约 12 核满载，对应冷记忆批量归档这类高负荷任务，上云承担）。
+  Cloudflare BGE-M3 免费额度每天 10,000 Neurons（embedding 每次 1-5 Neurons，
+  个人项目近零成本）；两库维度不同（384/1024）各建独立 pgvector 表。
+  调用细节与抽象设计见 `referenceDocumentation/EMBEDDING.md`。
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - src/aris/：cli.py（doctor 子命令）、config.py（pydantic-settings）、logging.py（loguru）、
   模块占位（core / memory / voice / behavior，无 persona）、csrc（demo.c + ctypes 加载）
@@ -28,7 +35,6 @@
 
 - LLM 提供方（用户调研中）
 - STT 选型
-- Embedding 本地实测（CPU 占用是否可接受；当前按「未定」处理）
 - persona 实现方式（提示词工程 vs MCP，模块已搁置）
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
 - 测试框架是否启用 pytest

@@ -10,8 +10,10 @@
 
 ## 会话启动检查（每次开始工作前）
 
-- **Embedding 方案确认**：先问用户当前用「本地模型」还是「Cloudflare BGE-M3」，
-  结果影响 memory 模块设计。用户未确认前不实现任何 Embedding 连接。
+- **Embedding 方案确认**：已定案（2026-08-09）：按记忆层级分 provider——
+  热记忆本地 Bekko a25m（OpenVINO CPU），冷记忆云端 Cloudflare BGE-M3；
+  两库维度不同（384/1024）各建独立 pgvector 表，详见
+  `referenceDocumentation/EMBEDDING.md`；实现 memory 模块时直接按此方案，无需再确认
 
 ## 现状
 
@@ -37,13 +39,11 @@
 
 - Python：最低 3.12，开发按 3.14
 - 依赖管理：uv；包布局 src 布局，包名 `aris`
-- 配置：pydantic-settings 优先，**方案待定**（Termux 无法安装 pydantic-core，分级备选见 PROJECT-PLAN.md「配置系统方案」；未定案前不改 config.py）
+- 配置：pydantic-settings（已定案，见 PROJECT-PLAN.md「配置系统方案」）；Termux 暂不可装，若需迁移见方案分级
 - 日志：loguru；测试：pytest（待确认）
 
 ## 待定（勿替用户做决定）
 
-- 配置系统方案（PC 实测 pydantic-settings 可装性后定，见 PROJECT-PLAN.md）
 - LLM 提供方：用户正在调研选型，**不要接入/实现任何 LLM 连接**，直到用户确定
-- Embedding 方案：本地（Bekko）vs Cloudflare BGE-M3，会话启动时确认；本地待用户实测 CPU 占用
 - STT 选型、人格系统实现方式（提示词工程 vs MCP，persona 模块已搁置）
 - 记忆库（计划 PostgreSQL + pgvector，后加 GraphRAG）

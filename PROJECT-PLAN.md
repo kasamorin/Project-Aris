@@ -55,7 +55,11 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 - **LLM**：暂定，接口鱼龙混杂，等调研后再定；API key 由用户填 env
 - **记忆数据库**：PostgreSQL + pgvector 起步，之后再加 GraphRAG（Apache AGE 或递归 CTE）
-- **Embedding**：本地优先（Bekko-embedding-v1-a25m，待用户实测 CPU 占用确认），云端备选 Cloudflare Workers AI BGE-M3；提供方抽象可插拔，**每次会话启动时向用户确认当前方案**
+- **Embedding**：**已定案（2026-08-09）**：按记忆层级分 provider——
+  热记忆本地 Bekko-embedding-v1-a25m（OpenVINO CPU，实测日常 CPU 5.3% / 延迟 10ms /
+  内存 1.5GiB）；冷记忆云端 Cloudflare Workers AI BGE-M3（免费额度内近零成本，
+  高负荷归档上云省本机算力）。两库维度不同（384/1024），各建独立 pgvector 表，
+  详见 `referenceDocumentation/EMBEDDING.md`
 - **TTS**：Edge TTS 起步（免费），Azure TTS 备选
 - **STT**：暂未定（参考候选：Groq Whisper / 通义听悟）
 - **交互形态**：先文字对话，后加语音
@@ -78,6 +82,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 - [ ] Python 静态检查/格式化工具选型（ruff 为 Rust 二进制，Termux 大概率装不上；备选纯 Python 的 black+isort+flake8）
 - [ ] LLM 提供方选型（用户调研中）
 - [ ] STT 选型
-- [ ] Embedding 本地模型实测（CPU 占用是否可接受，决定本地优先还是 Cloudflare 优先）
+- [x] Embedding 本地模型实测（2026-08-09 完成：Bekko a25m 日常 CPU 5.3% / 延迟 10ms /
+      内存 1.5GiB；定案按记忆层级分 provider，热记忆本地、冷记忆 Cloudflare BGE-M3）
 - [ ] 人格系统实现方式（提示词工程 vs 现有 MCP，决定是否重建 persona 模块）
 - [ ] 测试框架是否启用 pytest
