@@ -6,7 +6,7 @@
 
 ## 快速开始
 
-环境要求：Python >= 3.12，uv（Termux 与 Linux 均可）。
+环境要求：Python >= 3.12，uv（主环境为 Arch Linux）。
 
 ```bash
 # 1. 安装依赖并创建虚拟环境
@@ -38,20 +38,20 @@ src/aris/
 ├── config.py     # 全局配置（ARIS_ 前缀，.env 读取；实现方案见 AGENTS.md）
 ├── logging.py    # loguru 统一日志
 ├── csrc/         # C 扩展（ctypes 按需加载）
-├── core/         # Agent 核心 + LLM 连接（提供方抽象，占位）
+├── core/         # 基础设施：Agent 核心 + 一切外部连接统一出入口（提供方抽象，占位）
 ├── memory/       # 记忆系统（Embedding + PostgreSQL/pgvector，占位）
 ├── voice/        # 语音 STT/TTS（占位）
-└── behavior/     # 行为：函数调用 / MCP / Skills / 插件（占位）
+└── behavior/     # 行为：函数调用 / 连接外部或自建 MCP / Skills（占位）
 ```
 
 ## 数据与备份
 
 - 运行时数据（日志、数据库文件等）统一放在 `data/`，**不进 git**。
-- 备份建议：定期复制 `data/` 到外部介质，例如
-  `rsync -av data/ /backup/aris-data/`（Termux / Linux 均可用）。
+- 备份建议：定期复制 `data/` 到外部介质，例如 `rsync -av data/ /backup/aris-data/`。
 - 将来记忆库为 PostgreSQL 时，备份命令为 `pg_dump`，届时补充到本文档。
 - 密钥（API key）一律放 `.env`，同样不进 git。
 
 ## 决策记录
 
-技术决策、开发路线与待定事项统一见 `AGENTS.md`；模块级开发文档在 `developDoc/`。
+技术决策、开发路线与待定事项统一见 `AGENTS.md`；模块级开发文档在 `developDoc/`，
+候选参考在 `referenceDocumentation/`。
