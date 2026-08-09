@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from . import now
+from . import get_current_time
 from ..registry import ToolRegistry
 
 
 def register_builtin_tools(registry: ToolRegistry) -> None:
     """把全部内置工具注册进给定 registry。"""
-    now.register(registry)
+    get_current_time.register(registry)
