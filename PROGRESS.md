@@ -56,6 +56,16 @@
     正确触发 get_current_time 工具并返回准确时间（含拟人口吻）。工具返回结构化
      dict（year/month/day/hour/minute/second/weekday 及中文/ISO 编号/时区偏移），
      模型按需提取表达
+- **联网搜索跑通（2026-08-09）**：`web_search` 工具注册进 registry。
+  - Tavily API 为主链路（`.env` 里 `TAVILY_API_KEY`），返回外层 JSON
+    （`web_search_results` 标识）+ 内部 markdown 列表（每条带自增 id 供后续
+    `web_open` 点开），摘要截断省 token
+  - 浏览器链路（`behavior/browser.py` 管理 Playwright Firefox 生命周期、
+    `behavior/web.py` Bing/Google 解析）代码保留：官方不支持品牌版 Firefox，
+    headless 下 Bing/Google 均触发验证码，作为将来有头模式/换引擎的扩展点
+  - chat 会话持有 BrowserManager（惰性启动、会话结束 close 释放）
+  - 验证：真实模型「查 Python 3.14 新特性」正确触发 web_search → Tavily 返回
+    结果 → 模型消化并给出准确总结
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
@@ -72,12 +82,14 @@
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
 - 测试框架是否启用 pytest
 - 打断 vs 缓存输入策略（见 AGENTS.md 待定节）
+- Google 搜索接入方式：Custom Search JSON API 已停新申请（2027-01 停服），
+  候选 Gemini API Grounding（每日免费额度）或有头模式过反爬，实现前再定
 
 ## 下一步
 
 1. ~~跑通文字对话~~（已完成，`aris chat`）→ 记忆系统（PostgreSQL + pgvector）
-2. 行为扩展续：联网搜索（**方案已定案**：Playwright 驱动系统 Firefox + Tavily
-   兜底，首期只出搜索列表，见 AGENTS.md）、MCP 服务器、Skills
+2. 行为扩展续：联网搜索（**已完成**：Tavily 主链路 + 浏览器扩展点，见 AGENTS.md
+   定案节）、web_open（按 id 点开读正文）、MCP 服务器、Skills
 3. 语音链路（STT → LLM → TTS）
 
 ## 专项优化（暂缓）

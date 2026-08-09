@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..behavior import AgentLoop, ToolRegistry, register_builtin_tools
+from ..behavior import AgentLoop, BrowserManager, ToolRegistry, register_builtin_tools
 from ..core.llm import ChatRequest, LLMEngine, Message
 from .commands import (
     COMMAND_HELP,
@@ -102,8 +102,10 @@ class ChatSession:
         self.thinking = thinking  # 默认关闭思考模式（首字更快），--thinking 开启
         self.tools_enabled = tools_enabled
         self.registry = registry if registry is not None else ToolRegistry()
+        # 浏览器管理器：联网搜索用，会话内惰性启动、结束时 close() 释放
+        self.browser = BrowserManager(profile_dir=data_dir / "firefox-profile")
         if tools_enabled:
-            register_builtin_tools(self.registry)
+            register_builtin_tools(self.registry, browser=self.browser)
             system_prompt = f"{system_prompt} {TOOLS_SYSTEM_HINT}"
         self.history: list[Message] = [Message(role="system", content=system_prompt)]
         self._loop = AgentLoop(
@@ -126,6 +128,10 @@ class ChatSession:
             return f"已切换模型：{model_id}"
         hint = "\n".join(f"  {mid}" for mid in self.available_models)
         return f"未知模型 {model_id}，可用模型：\n{hint}"
+
+    def close(self) -> None:
+        """释放会话占用的资源（浏览器实例）。幂等，可安全多次调用。"""
+        self.browser.close()
 
     def run_command(self, parsed: ParsedCommand) -> CommandResult:
         """执行一条已解析的对话指令，返回 UI 层需要的结果。"""
@@ -231,4 +237,5 @@ class ChatSession:
             ):
                 print(delta, end="", flush=True)
             print()
+        self.close()  # 释放浏览器等会话资源
         return 0

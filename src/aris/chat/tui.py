@@ -214,5 +214,8 @@ class ChatTUI:
 
     # --- 入口 ---
     def run(self) -> int:
-        self.app.run()
+        try:
+            self.app.run()
+        finally:
+            self.session.close()  # 释放浏览器等会话资源
         return 0

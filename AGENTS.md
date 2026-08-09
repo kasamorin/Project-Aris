@@ -191,15 +191,18 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   方便以后加 GraphRAG（Apache AGE vs 递归 CTE 到时再定）
 - **记忆实现方式**：走 RAG，但**不用现有框架**（LangChain/LlamaIndex 等），
   自研轻量实现；重量依赖安装方式（独立环境 / pyproject extras）实现时再定
-- **联网搜索（2026-08-09 定案）**：Playwright 驱动系统 Firefox（`channel="firefox"`，
-  同步 API）为主链路 + Tavily 降级兜底。浏览器实例会话内常驻（chat 会话开始时
-  初始化、结束时关闭），用**独立干净 profile**（`data/firefox-profile/`，不碰用户
-  日常 profile，无封号风险）。引擎 Bing + Google 双选，反爬/失败先降级 Bing +
-  Tavily，多次失败把 Bing 提为优先。首期只返回**搜索列表**（JSON 包裹 + 内部
-  markdown + 每条带 `id`，预留 `web_open` 按 id 点开）；点开读正文、国内源深抓
-  （知乎/公众号全文）后续再加。失败策略：超时/页面加载失败 fallback（并重载）、
-  浏览器崩溃上 Tavily、初始化失败降级 Tavily + 写日志 + 提醒用户。多轮试错
-  （自主换搜索词）由 agent 决定。Tavily key 走 `.env`。实现 behavior 时按此方案
+- **联网搜索（2026-08-09 定案，实现同日微调）**：Tavily API 为主链路 +
+  Playwright 浏览器降级保留。原定「Playwright 驱动系统 Firefox」实测**不可行**——
+  官方不支持品牌版 Firefox（依赖私有补丁），已改用 Playwright 自带 Firefox 二进制。
+  且实测 headless 下 Bing/Google 均触发验证码反爬拦截，故实际搜索以 **Tavily 为主**
+  （专为 LLM 设计、无反爬，`TAVILY_API_KEY` 走 `.env`）；浏览器链路代码保留
+  （`behavior/browser.py` + `web.py`）作为将来尝试有头模式/换引擎的扩展点。
+  工具返回：外层 JSON（`{"type": "web_search_results", "engine", "results"}`）标识
+  是联网搜索结果 + 内部 markdown（省 token），每条带自增 id（供后续 `web_open`
+  按 id 点开）。首期只出搜索列表，点开读正文、国内源深抓后续再加。
+  agent 可自主多轮换搜索词（试错）。**后续方向**：试有头模式过反爬；或 Google
+  Custom Search JSON API 已停新申请（2027-01 停服），可考虑 Gemini API
+  Grounding（每日免费额度）接 Google 搜索
 - **TTS**：Edge TTS 起步（免费），Azure TTS 备选
 
 ## 待定（勿替用户做决定）
