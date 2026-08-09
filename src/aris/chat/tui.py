@@ -76,9 +76,11 @@ class ChatTUI:
             height=Dimension(preferred=1, max=5),
         )
         self._output_text = ""
-        # 盲文加载动画状态：spinner 在 _output_text 末尾旋转，首个内容 delta 到达即移除
-        self._spinner_active = False
-        self._spinner_pos = 0
+        # 状态行：Aris: + 盲文 spinner + 工具名（等待首字期间动态更新）
+        self._state_active = False
+        self._state_start = 0   # 状态行起点（Aris: 提示符之后的位置）
+        self._spinner_char = _SPINNER_FRAMES[0]
+        self._tool_name = ""
         self._append_output("开始与 Aris 对话（输入 /help 查看指令，ESC 两次中断回复，Ctrl-C 退出）\n")
 
         self.app = Application(
@@ -101,51 +103,38 @@ class ChatTUI:
         )
 
     def _append_output(self, text: str) -> None:
-        """向输出区追加文本。
-
-        若 spinner 动画在转，则把新文本插到 spinner 之前（spinner 保持末尾），
-        避免工具通知等内容把动画顶掉。
-        """
-        if self._spinner_active:
-            self._output_text = (
-                self._output_text[: self._spinner_pos]
-                + text
-                + self._output_text[self._spinner_pos :]
-            )
-            self._spinner_pos += len(text)
-        else:
-            self._output_text += text
+        """向输出区追加文本。"""
+        self._output_text += text
         self._set_output_document()
 
-    def _start_spinner(self) -> None:
-        """在输出区末尾启动盲文加载动画（幂等）。"""
-        if self._spinner_active:
-            return
-        self._spinner_active = True
-        self._spinner_pos = len(self._output_text)
-        self._append_output(_SPINNER_FRAMES[0])  # 插入首个动画帧
-        self.app.create_background_task(self._spin())
+    # --- 状态行（Aris: + spinner + 工具名，等待内容期间动态更新）---
+    def _render_state_line(self) -> None:
+        """把状态行渲染到输出区：`Aris: ⠋ 工具调用: 名称`（有工具名时）。"""
+        state = self._spinner_char
+        if self._tool_name:
+            state += f" 工具调用: {self._tool_name}"
+        self._output_text = self._output_text[: self._state_start] + state
+        self._set_output_document()
 
-    def _stop_spinner(self) -> None:
-        """移除输出区末尾的 spinner 动画（首个内容 delta 到达时调用）。"""
-        if not self._spinner_active:
+    def _show_tool(self, name: str) -> None:
+        """工具调用：把工具名显示到状态行（多工具时覆盖更新）。"""
+        self._tool_name = name
+        self._render_state_line()
+
+    def _clear_state_line(self) -> None:
+        """内容到达：移除 spinner 与工具名，保留 `Aris: ` 前缀直接输出内容。"""
+        if not self._state_active:
             return
-        self._spinner_active = False
-        # 去掉末尾的 spinner 字符（上次插入的一帧）
-        self._output_text = self._output_text[: self._spinner_pos]
+        self._state_active = False
+        self._output_text = self._output_text[: self._state_start]
         self._set_output_document()
 
     async def _spin(self) -> None:
-        """盲文 spinner 动画循环：每帧替换末尾字符，直到 _stop_spinner。"""
+        """盲文 spinner 动画循环：每帧替换状态行首字符，直到内容到达。"""
         frame = 0
-        while self._spinner_active:
-            ch = _SPINNER_FRAMES[frame % len(_SPINNER_FRAMES)]
-            self._output_text = (
-                self._output_text[: self._spinner_pos]
-                + ch
-                + self._output_text[self._spinner_pos + 1 :]
-            )
-            self._set_output_document()
+        while self._state_active:
+            self._spinner_char = _SPINNER_FRAMES[frame % len(_SPINNER_FRAMES)]
+            self._render_state_line()
             self.app.invalidate()
             frame += 1
             await asyncio.sleep(_SPINNER_INTERVAL)
@@ -218,7 +207,8 @@ class ChatTUI:
 
     def _clear_output(self) -> None:
         """清空输出区（仅视觉，不影响对话历史）。"""
-        self._stop_spinner()  # 避免残留动画帧在清屏后继续替换
+        self._state_active = False  # 停掉状态行，避免动画残留
+        self._tool_name = ""
         self._output_text = ""
         self.output_area.buffer.set_document(
             Document(text="", cursor_position=0),
@@ -229,7 +219,12 @@ class ChatTUI:
         self.input_area.read_only = True
         self._cancel_event.clear()
         self._append_output(PROMPT_ARIS)
-        self._start_spinner()  # 等待首字期间显示盲文加载动画
+        # 启动状态行（spinner 旋转；工具调用时在同行显示工具名）
+        self._state_active = True
+        self._state_start = len(self._output_text)
+        self._tool_name = ""
+        self._spinner_char = _SPINNER_FRAMES[0]
+        self.app.create_background_task(self._spin())
         threading.Thread(target=self._generate, args=(text,), daemon=True).start()
         self.app.create_background_task(self._consume())
 
@@ -258,13 +253,13 @@ class ChatTUI:
             if item is None:
                 break
             if isinstance(item, ToolNotice):
-                # 工具调用独立成行显示（不重复 Aris 提示符），spinner 继续转
-                self._append_output(f"\n  [调用工具 {item.name} → {item.result[:60]}]\n")
+                # 工具调用：在状态行同行显示工具名（不新增行，spinner 继续转）
+                self._show_tool(item.name)
             else:
-                self._stop_spinner()  # 首个内容 delta：移除加载动画
+                self._clear_state_line()  # 首个内容 delta：移除 spinner 与工具名
                 self._append_output(item)
             self.app.invalidate()
-        self._stop_spinner()
+        self._clear_state_line()
         self._append_output("\n")
         self._generating = False
         self.input_area.read_only = False
