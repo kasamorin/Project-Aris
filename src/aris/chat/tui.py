@@ -1,0 +1,161 @@
+"""全屏 TUI 文字对话界面（aris chat 交互模式）。
+
+布局：上方只读输出区（对话记录 + 流式回复，自动滚动），底部单行输入框。
+交互规则：
+- Aris 回复期间输入框只读（禁止输入文本），可按两次 ESC 中断回复
+- 第一次按 ESC 提示「再按一次」，短时间（0.8s）内再按才真正中断
+- Ctrl-C 退出程序
+- 输入 /help 查看可用指令
+非终端环境回退到简单 input() 循环（见 chat.session.ChatSession.repl）。
+"""
+
+from __future__ import annotations
+
+import asyncio
+import queue
+import threading
+import time
+
+from prompt_toolkit.application import Application
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.document import Document
+from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
+from prompt_toolkit.key_binding.defaults import load_key_bindings
+from prompt_toolkit.layout.containers import HSplit
+from prompt_toolkit.layout.dimension import Dimension
+from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.widgets import TextArea
+
+from .commands import COMMAND_HELP, PROMPT_ARIS, PROMPT_USER, parse_command
+from .session import ChatSession
+
+# 两次 ESC 间隔在此值（秒）内视为双击中断
+# 注意：prompt_toolkit 对 ESC 有 timeoutlen 内部延迟，handler 实际间隔
+# ≈ 真实按键间隔 + timeoutlen，故阈值需略宽
+_ESC_DOUBLE_GAP = 0.8
+
+
+class ChatTUI:
+    """基于 prompt_toolkit 的全屏对话界面。"""
+
+    def __init__(self, session: ChatSession) -> None:
+        self.session = session
+        self._cancel_event = threading.Event()
+        self._delta_queue: queue.Queue[str | None] = queue.Queue()
+        self._last_esc = 0.0
+        self._generating = False
+
+        self.output_area = TextArea(
+            read_only=True,
+            wrap_lines=True,
+            scrollbar=True,
+            focusable=False,
+            height=Dimension(weight=1),
+        )
+        self.input_area = TextArea(
+            multiline=False,
+            prompt=PROMPT_USER,
+            accept_handler=self._on_accept,
+            height=Dimension.exact(1),
+        )
+        self._output_text = ""
+        self._append_output("开始与 Aris 对话（输入 /help 查看指令，ESC 两次中断回复，Ctrl-C 退出）\n")
+
+        self.app = Application(
+            layout=Layout(HSplit([self.output_area, self.input_area])),
+            key_bindings=merge_key_bindings(
+                [load_key_bindings(), self._build_key_bindings()]
+            ),
+            full_screen=True,
+            mouse_support=True,
+        )
+        # ESC 作为 meta 前缀时 prompt_toolkit 会等待 timeoutlen 确认是否独立按键，
+        # 调小该值让双击 ESC 能被及时识别
+        self.app.timeoutlen = 0.2
+    # --- 界面渲染 ---
+    def _append_output(self, text: str) -> None:
+        """向输出区追加文本并自动滚动到底部。"""
+        self._output_text += text
+        # bypass_readonly 允许在只读 buffer 上更新内容（输出区不允许用户编辑）
+        self.output_area.buffer.set_document(
+            Document(text=self._output_text, cursor_position=len(self._output_text)),
+            bypass_readonly=True,
+        )
+
+    def _build_key_bindings(self) -> KeyBindings:
+        kb = KeyBindings()
+
+        @kb.add("c-c")
+        def _exit(_event) -> None:
+            self.app.exit()
+
+        @kb.add("escape")
+        def _esc(_event) -> None:
+            if not self._generating:
+                return
+            now = time.monotonic()
+            if now - self._last_esc < _ESC_DOUBLE_GAP:
+                self._cancel_event.set()
+                self._append_output("\n[已中断本次回复]\n")
+            else:
+                self._last_esc = now
+                self._append_output("\n[再按一次 ESC 终止输出]\n")
+
+        return kb
+
+    # --- 发送消息 ---
+    def _on_accept(self, buffer: Buffer) -> bool:
+        """Enter 时触发：发送消息或执行指令。"""
+        if self._generating:
+            return True
+        text = buffer.text.strip()
+        if not text:
+            return True
+        if text in {"/quit", "/exit"}:
+            self.app.exit()
+            return True
+        help_text = parse_command(text)
+        if help_text:
+            buffer.reset()
+            self._append_output(f"{PROMPT_USER}{text}\n{help_text}\n")
+            return True
+        buffer.reset()
+        self._append_output(f"{PROMPT_USER}{text}\n")
+        self._start_generation(text)
+        return True
+    def _start_generation(self, text: str) -> None:
+        self._generating = True
+        self.input_area.read_only = True
+        self._cancel_event.clear()
+        self._append_output(PROMPT_ARIS)
+        threading.Thread(target=self._generate, args=(text,), daemon=True).start()
+        self.app.create_background_task(self._consume())
+
+    def _generate(self, text: str) -> None:
+        """后台线程：流式生成，把增量放入队列，结束后放入 None。"""
+        try:
+            for delta in self.session.ask(
+                text, should_stop=lambda: self._cancel_event.is_set()
+            ):
+                self._delta_queue.put(delta)
+        finally:
+            self._delta_queue.put(None)  # 结束标记
+
+    async def _consume(self) -> None:
+        """UI 侧：消费队列增量，更新输出区，结束后解锁输入。"""
+        loop = asyncio.get_running_loop()
+        while True:
+            delta = await loop.run_in_executor(None, self._delta_queue.get)
+            if delta is None:
+                break
+            self._append_output(delta)
+            self.app.invalidate()
+        self._append_output("\n")
+        self._generating = False
+        self.input_area.read_only = False
+        self.app.invalidate()
+
+    # --- 入口 ---
+    def run(self) -> int:
+        self.app.run()
+        return 0

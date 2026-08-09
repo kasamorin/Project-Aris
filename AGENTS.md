@@ -149,7 +149,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 - `voice/` —— STT（语音识别）、TTS（语音合成）
 - `persona/` —— **已搁置**：人格系统，实现方式未定（提示词工程 vs MCP）
 - `behavior/` —— 行为：函数调用、连接外部 / 自建 MCP 服务器、Skills
-- 对话 CLI：单独分出来实现（如 `aris chat`），连接仍走 `core/`
+- `chat/` —— 文字对话（已实现）：`session.py`（会话逻辑）、`tui.py`（全屏界面）、
+  `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
   届时再评估是否独立成模块
 
@@ -158,7 +159,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
 2. 接入 LLM —— **已完成**（2026-08-09，`core/llm`，见 PROGRESS.md）
-3. 跑通文字对话
+3. 跑通文字对话 —— **已完成**（2026-08-09，`aris chat`，见 PROGRESS.md）
 4. 记忆系统（PostgreSQL + pgvector）
 5. 人格系统 —— **搁置**，实现方式未定（提示词工程 vs MCP）
 6. 语音链路（STT → LLM → TTS）
@@ -192,6 +193,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   用户构想中、未完善、以后可能换
 - STT 选型（候选：Groq Whisper / 通义听悟）
 - 人格系统实现方式（提示词工程 vs MCP，persona 模块已搁置）
+- **打断 vs 缓存输入策略（未定）**：Aris 流式回复期间用户提前输入的文本，当前
+  TUI 直接丢弃（`_discard_pending_input`）。未来可能改为：缓存输入 → 按场景判断
+  —— 交给 Aris（相当于「打断 + 继续听」）或丢弃并假装没听见（「装没听见」）。
+  判断依据待定（如语气、上下文、用户意图）。实现前先定方案
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
 - 测试框架是否启用 pytest
 
