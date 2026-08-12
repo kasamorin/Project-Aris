@@ -24,6 +24,7 @@ from .errors import (
     LLMError,
     LLMTimeoutError,
     NetworkError,
+    RateLimitError,
     classify_http_status,
 )
 from .formatters import to_openai_chat_body
