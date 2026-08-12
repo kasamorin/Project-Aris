@@ -223,6 +223,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | 开发内容 | 必读文档 |
 |---|---|
 | LLM 接入 / `core` 模块 | `developDoc/API-CALL.md` |
+| 统一通讯层（`core.bus` 服务/事件/审计） | `developDoc/BUS-ARCHITECTURE.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
 | `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |
 | 项目蓝图 | `developDoc/Project-Aris.md` |
