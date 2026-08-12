@@ -87,24 +87,33 @@
 
 ## 已知问题（待修）
 
-- **运行 `aris chat` 偶发 Node.js EPIPE 崩溃（2026-08-09）**：报错
+- **运行 `aris chat` 偶发 Node.js EPIPE 崩溃（2026-08-09，已修复）**：报错
   `node:events:487 throw er; Error: write EPIPE`（Node v24.18.1），
-  发生在 `uv run aris chat` 启动时。疑似与 Playwright 有关——其 driver
-  是 Node.js 进程，浏览器进程/管道异常退出时 driver 写入已关闭的管道。
-  注意 ChatSession 构造时会创建 BrowserManager（惰性，不启动），普通
-  聊天不应触发浏览器；需排查是否残留 Playwright 进程、firefox-profile
-  被锁，或浏览器相关代码在 chat 启动路径上有副作用
-- **TUI 状态行覆盖（2026-08-09）**：模型调用工具前若先输出了文字（如
+  发生在 `uv run aris chat` 启动时。疑似上次会话残留的 Playwright node
+  driver 孤儿进程向断裂管道写入所致（普通 chat 启动路径不触发浏览器）。
+  已实现 `cleanup_stale_browser_processes()`（behavior/browser.py）：按
+  「当前环境 playwright driver 路径 + 本 profile 目录」精确匹配并清理残留
+  孤儿进程与 profile 锁，在 `BrowserManager.start()` 与 `ChatSession.__init__`
+  两个时点调用。脚本验证通过，**待真机验证**（当前远程无显示器）。
+- **TUI 状态行覆盖（2026-08-09，已修复）**：模型调用工具前若先输出了文字（如
   "我搜一下"），工具调用提示会把那段文字覆盖掉（`_show_tool` 直接截断
-  到 `_state_start`）；且调用完输出紧跟同一行、无空格。需改为：内容已
-  输出后，工具调用不再覆盖、应另起一行显示。见 `src/aris/chat/tui.py`
-- **Shift+Enter 换行失效（2026-08-09）**：当前绑定 CSI-u 序列
+  到 `_state_start`）；且调用完输出紧跟同一行、无空格。已改 `_show_tool`
+  区分「状态行活跃=等待首字」与「内容已输出」两种情形，后者另起一行显示
+  `[调用工具: 名称]`。脚本验证通过（test_tui_issue2.py），**待真机验证**。
+- **Shift+Enter 换行失效（2026-08-09，已修复）**：当前绑定 CSI-u 序列
   `ESC[13;2u`，但实际输入框插入了「OM」两个字符——说明终端发送的是
-  `ESC O M`（SS3 应用键序列）而非 CSI-u。需兼容 `ESC O M` 或确认实际
-  终端发送的序列
-- **TUI 无法选中/复制文本（2026-08-09）**：全屏模式下 `mouse_support=True`
-  拦截了系统选中（点击被当作光标定位）。需确认是否支持 Shift+鼠标选中，
-  否则需关掉 mouse_support 或改配置
+  `ESC O M`（SS3 应用键序列）而非 CSI-u。已实测 prompt_toolkit 将 `ESC O M`
+  解析为 `Escape`+`O`+`M` 三个键，已加对应绑定（与 CSI-u 并存），
+  **待真机验证**。
+- **TUI 无法选中/复制文本（2026-08-09，已修复）**：全屏模式下
+  `mouse_support=True` 拦截了系统选中（点击被当作光标定位）。已确认
+  prompt_toolkit 鼠标事件区分 SHIFT 修饰符，方案定为「Shift+鼠标放行」：
+  自定义 `Vt100MouseEvent` 绑定接管鼠标事件，带 SHIFT 修饰时返回
+  `NotImplemented`（不消费，终端恢复系统选中），其余委托默认处理器
+  （点击定位/滚动）。注意：真正放行依赖终端在 Shift 下禁用 mouse
+  reporting（konsole 实测如此）；即使终端仍上报 Shift 事件，应用也会
+  忽略、不误触发光标定位。**待真机验证**（konsole Shift+拖拽选中复制）。
+  详见 `developDoc/TUI-问题修复.md`（四个问题全部验证通过后删除该文档）
 
 ## 下一步
 

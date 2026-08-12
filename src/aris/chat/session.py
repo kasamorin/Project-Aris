@@ -14,7 +14,13 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..behavior import AgentLoop, BrowserManager, ToolRegistry, register_builtin_tools
+from ..behavior import (
+    AgentLoop,
+    BrowserManager,
+    ToolRegistry,
+    cleanup_stale_browser_processes,
+    register_builtin_tools,
+)
 from ..core.llm import ChatRequest, LLMEngine, Message
 from .commands import (
     COMMAND_HELP,
@@ -104,6 +110,8 @@ class ChatSession:
         self.registry = registry if registry is not None else ToolRegistry()
         # 浏览器管理器：联网搜索用，会话内惰性启动、结束时 close() 释放
         self.browser = BrowserManager(profile_dir=data_dir / "firefox-profile")
+        # 清理上次强杀残留的 Playwright 孤儿进程（EPIPE 噪音 / profile 锁）
+        cleanup_stale_browser_processes(self.browser.profile_dir)
         if tools_enabled:
             register_builtin_tools(self.registry, browser=self.browser)
             system_prompt = f"{system_prompt} {TOOLS_SYSTEM_HINT}"

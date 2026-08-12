@@ -24,7 +24,10 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.filters import in_paste_mode
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
+from prompt_toolkit.key_binding.bindings.mouse import load_mouse_bindings
 from prompt_toolkit.key_binding.defaults import load_key_bindings
+from prompt_toolkit.key_binding.key_processor import KeyPressEvent
+from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout.containers import HSplit
 from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.layout.layout import Layout
@@ -41,6 +44,27 @@ _ESC_DOUBLE_GAP = 0.8
 # 盲文加载动画帧（等待首字到达时旋转，内容开始输出即消失）
 _SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 _SPINNER_INTERVAL = 0.1
+
+# 默认鼠标事件处理器（光标定位、滚动等），方案1 中供非 Shift 事件委托
+_DEFAULT_MOUSE_HANDLER = next(
+    b.handler for b in load_mouse_bindings().bindings if b.keys == (Keys.Vt100MouseEvent,)
+)
+
+
+def _is_shift_mouse(data: str) -> bool:
+    """判断 SGR 鼠标序列（CSI<b;x;yM）是否带 SHIFT 修饰。
+
+    b 的低位是按钮/事件类型，第 3 位（值 4）表示 SHIFT，见
+    prompt_toolkit 的 xterm_sgr_mouse_events 表（如 4 → left_down+SHIFT）。
+    非 SGR 序列（旧式）无修饰位，一律视为非 Shift。
+    """
+    if not data.startswith("\x1b[<"):
+        return False
+    try:
+        button = int(data[3:-1].split(";")[0])
+    except (ValueError, IndexError):
+        return False
+    return bool(button & 4)
 
 
 class ToolNotice:
@@ -117,9 +141,16 @@ class ChatTUI:
         self._set_output_document()
 
     def _show_tool(self, name: str) -> None:
-        """工具调用：把工具名显示到状态行（多工具时覆盖更新）。"""
-        self._tool_name = name
-        self._render_state_line()
+        """工具调用提示。
+
+        仍在等待首字（状态行活跃）时，把工具名显示到状态行同行；
+        已有内容输出（状态行已清除）时，另起一行显示，避免覆盖已输出的文字。
+        """
+        if self._state_active:
+            self._tool_name = name
+            self._render_state_line()
+        else:
+            self._append_output(f"\n  [调用工具: {name}]\n")
 
     def _clear_state_line(self) -> None:
         """内容到达：移除 spinner 与工具名，保留 `Aris: ` 前缀直接输出内容。"""
@@ -152,9 +183,12 @@ class ChatTUI:
         def _send(_event) -> None:
             _event.current_buffer.validate_and_handle()
 
-        # Shift+Enter 换行：终端需支持 CSI-u 扩展（kitty/wezterm/foot 等），
-        # 序列为 ESC[13;2u；不支持 CSI-u 的终端该键与 Enter 无法区分
+        # Shift+Enter 换行：两种终端序列都绑定，互不冲突
+        # - CSI-u ESC[13;2u（kitty/wezterm/foot 等）
+        # - SS3 ESC O M（本机实测，open code/其他终端的应用键序列）
+        # 不支持 CSI-u / SS3 的终端该键与 Enter 无法区分（Alt+Enter 兜底）
         @kb.add("escape", "[", "1", "3", ";", "2", "u")
+        @kb.add("escape", "O", "M")
         def _shift_enter(event) -> None:
             event.current_buffer.insert_text("\n")
 
@@ -174,6 +208,15 @@ class ChatTUI:
             else:
                 self._last_esc = now
                 self._append_output("\n[再按一次 ESC 终止输出]\n")
+
+        # 鼠标事件：带 SHIFT 修饰时放行（return NotImplemented 不消费），
+        # 让终端恢复系统文本选中；其余事件委托给默认处理器（点击定位/滚动）。
+        # 本绑定在 merge 后位于默认绑定之后（matches[-1]），必然接管事件。
+        @kb.add(Keys.Vt100MouseEvent)
+        def _mouse(event: KeyPressEvent) -> object:
+            if _is_shift_mouse(event.data):
+                return NotImplemented
+            return _DEFAULT_MOUSE_HANDLER(event)
 
         return kb
 
