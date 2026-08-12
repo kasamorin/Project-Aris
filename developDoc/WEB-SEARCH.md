@@ -17,14 +17,35 @@
    "results": "1. [标题](url)\n   摘要\n2. ..."}
   ```
 
-- 每条结果自带自增 id（第 1 条为 1），供后续 `web_open` 按 id 点开正文。
+- 每条结果自带自增 id（第 1 条为 1）。`web_search` 同时把 id→{title, url}
+  写入模块级缓存 `_recent_results`（覆盖式，仅保留最近一次搜索），
+  供 `web_open` 按 id 点开读正文。
 - 失败策略：Tavily 失败（无 key / 网络 / 无结果）返回
   `{"type": "web_search_error", ...}` 错误文本 JSON 给模型消化，宽容降级不抛 UI。
-- 截断：正文摘要截到 `_TAVILY_SNIPPET_MAX = 200` 字符省 token。
-- 首期只出搜索列表；点开读正文、国内源深抓后续再加。
+- 摘要截断长度等可调参数在 `config/search.toml`（`timeout_seconds`、
+  `results_count`、`snippet_max_len`）。
+
+**网页正文读取**（`web_open(id: int)`，同文件）：
+
+- 按 id 从 `_recent_results` 取 url → `httpx` GET（浏览器 UA + 超时 + 跟随重定向）
+  → `trafilatura` 提取正文纯文本（过滤导航/页脚/广告）→ markdown 返回。
+- 返回格式：
+
+  ```json
+  {"type": "web_open_result", "id": 2, "content": "# 标题\n\n原文链接：...\n\n正文…"}
+  ```
+
+- 失败降级：id 不在最近结果 / 抓取失败 / 正文提取为空（动态渲染页面）→
+  `{"type": "web_open_error", "id": ..., "error": "..."}`。
+- 正文长度截断（默认 4000 字符）与抓取超时（默认 20s）在 `config/search.toml`
+  （`webopen_timeout_seconds`、`webopen_max_chars`）。
+- 注意：`web_open` 只能点开**最近一次** `web_search` 的结果，搜索新关键词后
+  旧 id 失效（覆盖式缓存）。agent 可自主多轮换搜索词（试错）。
+- 局限：不适用于 JS 动态渲染页面（正文提取为空）；国内源未做深抓。
 
 ### 后续方向（未定，勿现在实现）
 
+- 国内源深抓（正文提取 + 反爬处理）。
 - Google Custom Search JSON API 已停新申请（2027-01 停服），不可用。
 - 可考虑 Gemini API Grounding（每日免费额度）接 Google 搜索。
 

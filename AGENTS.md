@@ -191,7 +191,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
    世界观/人际关系/成长轨迹后续演进
 6. 语音链路（STT → LLM → TTS）
 7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
-   MCP / Skills / web_open 待后续；联网搜索已完成（Tavily 唯一主链路）
+   MCP / Skills 待后续；联网搜索已完成（Tavily 唯一主链路 + web_open）
 8. GraphRAG
 
 ## 已定案（直接照做，无需再确认）
@@ -223,8 +223,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   Firefox 二进制；headless 下 Bing/Google 均触发验证码反爬）——该链路已
   **代码删除**，历史与恢复要点留档在 `developDoc/WEB-SEARCH.md`，勿再实现。
   工具返回：外层 JSON（`{"type": "web_search_results", "engine", "results"}`）
-  标识是联网搜索结果 + 内部 markdown（省 token），每条带自增 id（供后续
-  `web_open` 按 id 点开）。首期只出搜索列表，点开读正文、国内源深抓后续再加。
+  标识是联网搜索结果 + 内部 markdown（省 token），每条带自增 id。
+  **`web_open(id)` 已实现（2026-08-12）**：按 id 抓取网页正文（httpx +
+  trafilatura 提取，过滤导航/页脚/广告），markdown 返回，失败宽容降级。
+  id→url 映射为覆盖式缓存（仅最近一次搜索有效）。国内源深抓后续再加。
   agent 可自主多轮换搜索词（试错）。**后续方向**：Google Custom Search JSON
   API 已停新申请（2027-01 停服），可考虑 Gemini API Grounding（每日免费额度）
   接 Google 搜索

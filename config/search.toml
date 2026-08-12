@@ -8,3 +8,9 @@ results_count = 5
 
 # 摘要截断长度（字符，省 token）
 snippet_max_len = 200
+
+# web_open：抓取网页正文的超时（秒）
+webopen_timeout_seconds = 20.0
+
+# web_open：返回正文最大长度（字符，截断省 token）
+webopen_max_chars = 4000

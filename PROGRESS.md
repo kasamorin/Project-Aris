@@ -82,6 +82,14 @@
   生效，headless 下 Bing/Google 全触发验证码，Tavily 一直兜底），Tavily 成为
   唯一主链路，工具简化为 `web_search(query)`；移除 playwright 依赖。
   历史与恢复要点留档 `developDoc/WEB-SEARCH.md`
+- **web_open 点开读正文（2026-08-12）**：新增 `web_open(id)` 工具。
+  - `web_search` 把 id→{title,url} 写入模块级缓存（覆盖式，仅最近一次），
+    `web_open` 按 id 抓取网页（httpx + 浏览器 UA + 超时）→ `trafilatura`
+    提取正文（过滤导航/页脚/广告）→ markdown 返回（截断省 token）
+  - 新增依赖 trafilatura（成熟正文提取库，符合轮子哲学）
+  - 失败宽容降级：id 无效 / 抓取失败 / 动态页面正文为空 → 错误文本 JSON
+  - 验证：真实模型「查 Rust 2025 新特性 → 点开第 1 条读正文 → 总结」完整链路
+    跑通，agent 还主动判断结果不对口并提出换关键词再搜
 - **配置体系定案（2026-08-12）**：三个配置源各管一摊。
   - `.env`（ARIS_ 前缀）：启动级/密钥/data_dir/llm_providers_file
   - `config/providers.toml`：LLM 提供方（已从根目录移入）
@@ -144,8 +152,8 @@
 
 1. 人格模块（**进行中**，2026-08-12）：提示词工程起步，把 system prompt 独立
    成 `persona` 模块，后续演进世界观/关系网等 → 记忆系统（PostgreSQL + pgvector）
-2. 行为扩展续：web_open（按 id 点开读正文）、MCP 服务器、Skills
-   （联网搜索已完成：Tavily 唯一主链路）
+2. 行为扩展续：MCP 服务器、Skills（**联网搜索已完成**：Tavily 唯一主链路 +
+   web_open 点开读正文）
 3. 语音链路（STT → LLM → TTS）
 
 ## 专项优化（暂缓）
