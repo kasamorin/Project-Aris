@@ -114,6 +114,11 @@ summary = query_summary()            # 聚合统计
 | `llm.deltas` | `LLMEngine.__init__` | 完整增量流式（含完成事件/tool_calls） | `behavior/loop.py` |
 | `tools.execute` | `ToolRegistry.__init__` | 执行工具，返回文本结果 | `behavior/loop.py` |
 | `loop.run` | `AgentLoop.__init__` | 跑完整「LLM↔工具」循环，产出事件流 | `chat/session.py` |
+| `loop.set_model` | `AgentLoop.__init__` | 切换模型：更新 loop 内部 model id | `chat/session.py` |
+
+> 注：曾规划 `browser.close` / `browser.cleanup` 服务，因浏览器链路
+> （Playwright）已整体删除（2026-08-12，见 `developDoc/WEB-SEARCH.md`），
+> 不再需要。
 
 ## 迁移状态
 
@@ -137,10 +142,10 @@ summary = query_summary()            # 聚合统计
 
 ### 未迁移（遗留，后续视需要处理）
 
-- `session.py` 中 `self.browser.close()`、`cleanup_stale_browser_processes()`
-  目前仍直接调用（属浏览器生命周期管理，可将来注册 `browser.close` /
-  `browser.cleanup` 服务）。
-- `loop.set_model` 暂未注册服务（`session.set_model` 直接改 `_loop.model_id`）。
+- ~~`session.py` 中 `self.browser.close()`、`cleanup_stale_browser_processes()`~~
+  → **已随浏览器链路删除**（2026-08-12），无需处理。
+- `loop.set_model` 已注册为 `loop.set_model` 服务（见服务表），
+  `session.set_model` 经 `call("loop.set_model", model_id)` 调用，已完成迁移。
 
 ## 后续待办
 

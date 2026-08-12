@@ -57,6 +57,11 @@ class AgentLoop:
         self.max_rounds = max_rounds
         # 注册为统一服务：agent loop 统一走 core.call("loop.run", ...)
         provide("loop.run", self.iter_events)
+        provide("loop.set_model", self.set_model)
+
+    def set_model(self, model_id: str) -> None:
+        """切换模型：仅更新内部 model id，后续请求使用新模型。"""
+        self.model_id = model_id
 
     def iter_events(
         self,

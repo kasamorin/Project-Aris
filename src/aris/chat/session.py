@@ -16,9 +16,7 @@ from pathlib import Path
 
 from ..behavior import (
     AgentLoop,
-    BrowserManager,
     ToolRegistry,
-    cleanup_stale_browser_processes,
     register_builtin_tools,
 )
 from ..core import call
@@ -109,12 +107,8 @@ class ChatSession:
         self.thinking = thinking  # 默认关闭思考模式（首字更快），--thinking 开启
         self.tools_enabled = tools_enabled
         self.registry = registry if registry is not None else ToolRegistry()
-        # 浏览器管理器：联网搜索用，会话内惰性启动、结束时 close() 释放
-        self.browser = BrowserManager(profile_dir=data_dir / "firefox-profile")
-        # 清理上次强杀残留的 Playwright 孤儿进程（EPIPE 噪音 / profile 锁）
-        cleanup_stale_browser_processes(self.browser.profile_dir)
         if tools_enabled:
-            register_builtin_tools(self.registry, browser=self.browser)
+            register_builtin_tools(self.registry)
             system_prompt = f"{system_prompt} {TOOLS_SYSTEM_HINT}"
         self.history: list[Message] = [Message(role="system", content=system_prompt)]
         self._loop = AgentLoop(
@@ -133,14 +127,17 @@ class ChatSession:
         """切换模型；id 不在可用列表时返回错误文本，不切换。"""
         if model_id in self.available_models:
             self.model_id = model_id
-            self._loop.model_id = model_id
+            call("loop.set_model", model_id)
             return f"已切换模型：{model_id}"
         hint = "\n".join(f"  {mid}" for mid in self.available_models)
         return f"未知模型 {model_id}，可用模型：\n{hint}"
 
     def close(self) -> None:
-        """释放会话占用的资源（浏览器实例）。幂等，可安全多次调用。"""
-        self.browser.close()
+        """释放会话占用的资源。幂等，可安全多次调用。
+
+        当前会话无外部资源（浏览器方案已移除，联网搜索走 Tavily API），
+        保留方法以兼容调用方（TUI / repl 的退出路径）。
+        """
 
     def run_command(self, parsed: ParsedCommand) -> CommandResult:
         """执行一条已解析的对话指令，返回 UI 层需要的结果。"""

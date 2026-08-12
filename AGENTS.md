@@ -191,18 +191,17 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   方便以后加 GraphRAG（Apache AGE vs 递归 CTE 到时再定）
 - **记忆实现方式**：走 RAG，但**不用现有框架**（LangChain/LlamaIndex 等），
   自研轻量实现；重量依赖安装方式（独立环境 / pyproject extras）实现时再定
-- **联网搜索（2026-08-09 定案，实现同日微调）**：Tavily API 为主链路 +
-  Playwright 浏览器降级保留。原定「Playwright 驱动系统 Firefox」实测**不可行**——
-  官方不支持品牌版 Firefox（依赖私有补丁），已改用 Playwright 自带 Firefox 二进制。
-  且实测 headless 下 Bing/Google 均触发验证码反爬拦截，故实际搜索以 **Tavily 为主**
-  （专为 LLM 设计、无反爬，`TAVILY_API_KEY` 走 `.env`）；浏览器链路代码保留
-  （`behavior/browser.py` + `web.py`）作为将来尝试有头模式/换引擎的扩展点。
-  工具返回：外层 JSON（`{"type": "web_search_results", "engine", "results"}`）标识
-  是联网搜索结果 + 内部 markdown（省 token），每条带自增 id（供后续 `web_open`
-  按 id 点开）。首期只出搜索列表，点开读正文、国内源深抓后续再加。
-  agent 可自主多轮换搜索词（试错）。**后续方向**：试有头模式过反爬；或 Google
-  Custom Search JSON API 已停新申请（2027-01 停服），可考虑 Gemini API
-  Grounding（每日免费额度）接 Google 搜索
+- **联网搜索（2026-08-09 定案；2026-08-12 精简）**：**Tavily API 唯一主链路**
+  （专为 LLM 设计、无反爬，`TAVILY_API_KEY` 走 `.env`）。曾尝试 Playwright
+  驱动浏览器降级方案（原定驱动系统 Firefox，实测官方不支持品牌版，改用自带
+  Firefox 二进制；headless 下 Bing/Google 均触发验证码反爬）——该链路已
+  **代码删除**，历史与恢复要点留档在 `developDoc/WEB-SEARCH.md`，勿再实现。
+  工具返回：外层 JSON（`{"type": "web_search_results", "engine", "results"}`）
+  标识是联网搜索结果 + 内部 markdown（省 token），每条带自增 id（供后续
+  `web_open` 按 id 点开）。首期只出搜索列表，点开读正文、国内源深抓后续再加。
+  agent 可自主多轮换搜索词（试错）。**后续方向**：Google Custom Search JSON
+  API 已停新申请（2027-01 停服），可考虑 Gemini API Grounding（每日免费额度）
+  接 Google 搜索
 - **TTS**：Edge TTS 起步（免费），Azure TTS 备选
 
 ## 待定（勿替用户做决定）
@@ -224,6 +223,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 |---|---|
 | LLM 接入 / `core` 模块 | `developDoc/API-CALL.md` |
 | 统一通讯层（`core.bus` 服务/事件/审计） | `developDoc/BUS-ARCHITECTURE.md` |
+| 联网搜索方案（演进历史 / 留档） | `developDoc/WEB-SEARCH.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
 | `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |
 | 项目蓝图 | `developDoc/Project-Aris.md` |
