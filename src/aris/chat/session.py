@@ -31,17 +31,19 @@ from .commands import (
     parse_command,
 )
 
-# 简单 Aris 人设（persona 模块已搁置，此处仅作为对话 CLI 的默认系统提示词）
-ARIS_SYSTEM_PROMPT = (
-    "你是 Aris，一个拟人 AI。"
-    "你说话简洁、自然、略带温度，像一个人类朋友，不用『作为AI』之类的套话。"
-    "基于对话历史自然地继续交谈。"
-)
+# 兜底人设：仅当 persona.system_prompt 服务未注册时使用（正常路径不会走到）
+_FALLBACK_SYSTEM_PROMPT = "你是 Aris，一个拟人 AI，说话简洁自然。"
 
 # 工具可用时追加到系统提示词
 TOOLS_SYSTEM_HINT = (
     "当需要实时信息（如当前时间、资料搜索）时使用提供的工具，使用前简单说明一句。"
 )
+
+
+def _default_system_prompt() -> str:
+    """默认系统提示词：经统一通讯层取 persona 人设，服务缺失时用兜底文本。"""
+    prompt = call("persona.system_prompt")
+    return prompt if prompt else _FALLBACK_SYSTEM_PROMPT
 
 
 @dataclass
@@ -104,7 +106,7 @@ class ChatSession:
         engine: LLMEngine,
         *,
         model_id: str,
-        system_prompt: str = ARIS_SYSTEM_PROMPT,
+        system_prompt: str | None = None,
         data_dir: Path | None = None,
         thinking: bool = False,
         tools_enabled: bool = True,
@@ -114,6 +116,8 @@ class ChatSession:
             from ..config import get_settings
 
             data_dir = get_settings().data_dir
+        if system_prompt is None:
+            system_prompt = _default_system_prompt()
         self.engine = engine
         self.model_id = model_id
         self._system_prompt = system_prompt

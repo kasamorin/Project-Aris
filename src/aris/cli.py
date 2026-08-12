@@ -78,7 +78,7 @@ def _cmd_llm_test(args: argparse.Namespace) -> int:
 
 def _cmd_chat(args: argparse.Namespace) -> int:
     """文字对话：有消息参数走单次问答，无参数进入交互循环。"""
-    from aris.chat import ARIS_SYSTEM_PROMPT, ChatSession
+    from aris.chat import ChatSession
     from aris.core.llm import LLMEngine, load_providers
 
     settings = get_settings()
@@ -91,7 +91,7 @@ def _cmd_chat(args: argparse.Namespace) -> int:
     session = ChatSession(
         engine,
         model_id=args.model,
-        system_prompt=args.system or ARIS_SYSTEM_PROMPT,
+        system_prompt=args.system,  # None 时使用 persona 人设（提示词工程）
         data_dir=settings.data_dir,
         thinking=args.thinking,
         tools_enabled=not args.no_tools,
