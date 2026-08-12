@@ -99,6 +99,19 @@
     ApiFormat / FinishReason / WebSearchResultType / AuditKind），~35 处魔法
     字符串替换；实现细节保持模块顶部常量；data 路径统一从 Settings.data_dir 取
   - 详 `developDoc/CONFIG.md`
+- **技能系统（Skills）落地（2026-08-12）**：目录化、按需加载的能力扩展机制。
+  - 三层渐进式披露：L1 菜单（只读 frontmatter 注入 system prompt）→ L2 激活
+    （模型调 `activate_skill(name)`，读 SKILL.md 全文 + 装载 tools.py 工具）→
+    L3 详情（references 按需读取，预留）。SKILL.md 正文限定 <500 行，
+    长内容拆 references/，激活整篇返回不截断
+  - 每个 skill 是一个目录 `skills/<name>/`（SKILL.md + 可选 tools.py +
+    references/），新增 `SkillManager`（发现/菜单/激活/幂等），注册
+    `skills.menu` 总线服务；`activate_skill` 是 registry 里的常驻工具
+  - demo `note`（备忘）skill：`note_save`/`note_read`/`note_list`，
+    笔记持久化 `<data_dir>/notes/`
+  - 验证：真实模型「记个备忘 → 查看」自主激活 skill 完整链路跑通，未激活
+    时 registry 只含 `activate_skill` + 内置工具（不污染）
+  - 详 `developDoc/SKILLS.md`
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
@@ -150,10 +163,10 @@
 
 ## 下一步
 
-1. 人格模块（**进行中**，2026-08-12）：提示词工程起步，把 system prompt 独立
-   成 `persona` 模块，后续演进世界观/关系网等 → 记忆系统（PostgreSQL + pgvector）
-2. 行为扩展续：MCP 服务器、Skills（**联网搜索已完成**：Tavily 唯一主链路 +
-   web_open 点开读正文）
+1. 行为扩展续（**进行中**，2026-08-12）：Skills 机制已落地（note demo 验证）；
+   下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
+   以 note 为模板做
+2. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
 3. 语音链路（STT → LLM → TTS）
 
 ## 专项优化（暂缓）

@@ -116,6 +116,10 @@ summary = query_summary()            # 聚合统计
 | `loop.run` | `AgentLoop.__init__` | 跑完整「LLM↔工具」循环，产出事件流 | `chat/session.py` |
 | `loop.set_model` | `AgentLoop.__init__` | 切换模型：更新 loop 内部 model id | `chat/session.py` |
 | `persona.system_prompt` | `persona/__init__.py` | 返回 Aris 系统提示词 | `chat/session.py`（默认人设，`--system` 可覆盖） |
+| `skills.menu` | `SkillManager.__init__` | 返回技能清单（注入 system prompt 供模型判断何时激活） | `chat/session.py`（工具启用时） |
+
+> 注：`activate_skill` 是注册在 `ToolRegistry` 里的普通工具（经 `tools.execute`
+> 总线执行），**不是**独立服务。skill 系统详见 `developDoc/SKILLS.md`。
 
 > 注：曾规划 `browser.close` / `browser.cleanup` 服务，因浏览器链路
 > （Playwright）已整体删除（2026-08-12，见 `developDoc/WEB-SEARCH.md`），
@@ -138,6 +142,15 @@ summary = query_summary()            # 聚合统计
 
 > 注：persona 无核心类实例，采用模块级注册（import 即注册）；服务注册表是
 > 全局的，模块加载顺序无关紧要——session 在构造时经 call 获取即可。
+
+### 已迁移（第三批：Skills，2026-08-12）
+
+- `skills/manager.py`：`SkillManager.__init__` 内 `provide("skills.menu")` +
+  把 `activate_skill` 注册进 registry（同 ToolRegistry 类的实例自注册模式）。
+- `chat/session.py`：工具启用时创建 `SkillManager`，把技能菜单追加进
+  system prompt；模型激活 skill 后其工具注册进同一 registry。
+- 设计边界：skill 的发现/激活是 session 的装配动作，不额外走总线；
+  skill 内的工具执行经现有 `tools.execute` 服务统一处理。
 
 ### 明确不走总线（设计边界）
 

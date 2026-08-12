@@ -64,7 +64,8 @@ src/aris/
 │   └── llm/        #   提供方抽象 / fallback / 流式 / 工具调用
 ├── persona/        # 人格（提示词工程起步）：system_prompt 服务
 ├── behavior/       # 行为：agent loop + 工具注册表 + 内置工具
-│   └── tools/      #   内置工具：web_search（Tavily）、get_current_time
+│   ├── tools/      #   内置工具：web_search（Tavily）、web_open、get_current_time
+│   └── skills/     #   skill 技能系统：目录化、按需激活（demo：note 备忘）
 ├── chat/           # 文字对话：session（会话）+ tui（全屏界面）+ commands（指令）
 ├── memory/         # 记忆系统（Embedding + 数据库，占位）
 ├── voice/          # 语音 STT / TTS（占位）

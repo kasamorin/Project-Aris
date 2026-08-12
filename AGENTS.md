@@ -166,7 +166,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   `persona.system_prompt` 服务，其他模块经 `core.call` 取人设，不再硬编码；
   世界观/人际关系/成长轨迹后续在此演进
 - `behavior/` —— 行为（函数调用已实现）：`registry.py` 工具注册表、`loop.py` agent loop
-  （LLM↔工具循环）、`tools/` 内置工具集；MCP / Skills 后续作为工具来源注册进 registry
+  （LLM↔工具循环）、`tools/` 内置工具集、`skills/` 技能系统（2026-08-12 落地：
+  目录化 skill，`SKILL.md` + 可选 `tools.py`；`SkillManager` 发现/菜单/激活，
+  三层渐进式披露，详见 `developDoc/SKILLS.md`）；MCP 后续作为工具来源注册进 registry
 - `chat/` —— 文字对话（已实现）：`session.py`（会话逻辑）、`tui.py`（全屏界面）、
   `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
@@ -257,6 +259,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | LLM 接入 / `core` 模块 | `developDoc/API-CALL.md` |
 | 配置文件体系（三源分工 / 收口原则） | `developDoc/CONFIG.md` |
 | 统一通讯层（`core.bus` 服务/事件/审计） | `developDoc/BUS-ARCHITECTURE.md` |
+| 技能系统（`behavior.skills`） | `developDoc/SKILLS.md` |
 | 联网搜索方案（演进历史 / 留档） | `developDoc/WEB-SEARCH.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
 | `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |

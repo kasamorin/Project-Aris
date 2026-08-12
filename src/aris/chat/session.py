@@ -21,6 +21,7 @@ from ..behavior import (
     ToolRegistry,
     register_builtin_tools,
 )
+from ..behavior.skills import SkillManager
 from ..core import call
 from ..core.llm import ChatRequest, LLMEngine, Message, MessageRole
 from .commands import (
@@ -127,7 +128,13 @@ class ChatSession:
         self.registry = registry if registry is not None else ToolRegistry()
         if tools_enabled:
             register_builtin_tools(self.registry)
-            system_prompt = f"{system_prompt} {TOOLS_SYSTEM_HINT}"
+            self._skills = SkillManager(self.registry)
+            prompt_parts = [system_prompt, TOOLS_SYSTEM_HINT]
+            menu = self._skills.menu()
+            if menu:
+                prompt_parts.append(menu)
+            system_prompt = "\n\n".join(prompt_parts)
+        self._system_prompt = system_prompt
         self.history: list[Message] = [Message(role=MessageRole.SYSTEM, content=system_prompt)]
         self._loop = AgentLoop(
             engine, registry=self.registry, model_id=model_id
