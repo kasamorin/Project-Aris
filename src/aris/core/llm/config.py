@@ -1,6 +1,6 @@
 """LLM 提供方配置：数据模型与 toml 加载。
 
-提供方结构定义在 `providers.toml`（模板 `providers.example.toml`）：
+提供方结构定义在 `config/providers.toml`（模板 `config/providers.example.toml`）：
 每个提供方含名称、id、base_url、密钥环境变量名、超时、传输方式、
 以及模型列表（统一 id / 请求名 / 支持格式）。
 
@@ -11,7 +11,17 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
+
+from .message import ApiFormat
+
+
+class TransportKind(StrEnum):
+    """LLM 请求传输方式（sdk 官方库 / httpx 手写）。"""
+
+    SDK = "sdk"
+    HTTPX = "httpx"
 
 
 @dataclass
@@ -21,7 +31,7 @@ class LLMModel:
     id: str
     name: str
     request_name: str
-    formats: list[str] = field(default_factory=lambda: ["chat"])
+    formats: list[str] = field(default_factory=lambda: [ApiFormat.CHAT])
 
 
 @dataclass
@@ -33,7 +43,7 @@ class LLMProvider:
     base_url: str
     api_key_env: str
     timeout: float = 30.0
-    transport: str = "sdk"  # sdk（openai SDK）/ httpx（手写请求）
+    transport: str = TransportKind.SDK  # sdk（openai SDK）/ httpx（手写请求）
     models: list[LLMModel] = field(default_factory=list)
 
     def get_model(self, model_id: str) -> LLMModel | None:
@@ -45,7 +55,7 @@ class LLMProvider:
 
 
 class ProviderConfigError(FileNotFoundError):
-    """providers.toml 缺失或格式错误。"""
+    """config/providers.toml 缺失或格式错误。"""
 
 
 @dataclass
@@ -99,7 +109,7 @@ def load_providers(path: str | Path) -> ProviderConfig:
     p = Path(path)
     if not p.exists():
         raise ProviderConfigError(
-            f"提供方配置文件不存在: {p}（可复制 providers.example.toml 为 providers.toml）"
+            f"提供方配置文件不存在: {p}（可复制 config/providers.example.toml 为 config/providers.toml）"
         )
     with p.open("rb") as f:
         data = tomllib.load(f)
@@ -113,7 +123,7 @@ def load_providers(path: str | Path) -> ProviderConfig:
                     id=m["id"],
                     name=m.get("name", m["id"]),
                     request_name=m.get("request_name", m["id"]),
-                    formats=m.get("formats", ["chat"]),
+                    formats=m.get("formats", [ApiFormat.CHAT]),
                 )
                 for m in entry.get("models", [])
             ]
@@ -124,13 +134,13 @@ def load_providers(path: str | Path) -> ProviderConfig:
                     base_url=entry["base_url"],
                     api_key_env=entry.get("api_key_env", f"{entry['id'].upper()}_API_KEY"),
                     timeout=float(entry.get("timeout", 30.0)),
-                    transport=entry.get("transport", "sdk"),
+                    transport=entry.get("transport", TransportKind.SDK),
                     models=models,
                 )
             )
         except KeyError as e:
             raise ProviderConfigError(
-                f"providers.toml 提供方条目缺少必需字段: {e}"
+                f"config/providers.toml 提供方条目缺少必需字段: {e}"
             ) from e
 
     order = list(data.get("default_provider_order", []))

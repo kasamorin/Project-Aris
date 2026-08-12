@@ -9,9 +9,12 @@
 """
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
+
+from .cfgtoml import load_config
 
 _CONSOLE_FORMAT = (
     "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | "
@@ -22,22 +25,35 @@ _FILE_FORMAT = (
     "<cyan>{name}</cyan> | <level>{message}</level>"
 )
 
-# 单个日志文件大小上限（轮转阈值）
-_FILE_ROTATION = "10 MB"
+
+@dataclass
+class LoggingConfig:
+    """文件日志可调参数（config/logging.toml）。"""
+
+    file_rotation: str = "10 MB"
+    retention: str = "30 days"
+
+
+_logging_config = load_config(LoggingConfig(), "logging.toml")
 
 
 def setup_logging(
     level: str = "INFO",
-    data_dir: Path = Path("data"),
+    data_dir: Path | None = None,
     console_level: str | None = None,
 ) -> None:
     """配置全局日志：控制台 + 按天/大小轮转的文件日志。
 
     参数:
         level: 文件日志级别（DEBUG / INFO / WARNING / ERROR），大小写不敏感。
-        data_dir: 数据根目录，日志文件写入 `<data_dir>/logs/YYYY-MM-DD/`。
+        data_dir: 数据根目录，日志文件写入 `<data_dir>/logs/YYYY-MM-DD/`；
+            为 None 时取全局配置 settings.data_dir。
         console_level: 控制台日志级别；为 None 时默认显示 WARNING 及以上。
     """
+    if data_dir is None:
+        from .config import get_settings
+
+        data_dir = get_settings().data_dir
     level = level.upper()
     console_level = (console_level or "WARNING").upper()
     logger.remove()
@@ -49,8 +65,8 @@ def setup_logging(
         data_dir / "logs" / "{time:YYYY-MM-DD}" / "aris.log",
         level=level,
         format=_FILE_FORMAT,
-        rotation=_FILE_ROTATION,
-        retention="30 days",  # 只保留 30 天内的日志
+        rotation=_logging_config.file_rotation,
+        retention=_logging_config.retention,
         encoding="utf-8",
         enqueue=True,  # 线程安全，异步写文件
         backtrace=True,  # 记录异常完整堆栈

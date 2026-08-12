@@ -1,0 +1,7 @@
+# 文件日志配置（loguru，写入 <data_dir>/logs/YYYY-MM-DD/aris.log）
+
+# 单个日志文件大小上限（超过后切 aris.log.1、aris.log.2 ...）
+file_rotation = "10 MB"
+
+# 日志保留期（超过即清理，loguru 时间格式）
+retention = "30 days"

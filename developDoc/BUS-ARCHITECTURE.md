@@ -149,18 +149,13 @@ summary = query_summary()            # 聚合统计
 
 ## 后续待办
 
-1. **枚举 / 魔法字符串收口 + 配置集中化**（已列在 PROGRESS.md 待定）：
-   - `"bing"/"google"`（web.py / web_search.py 散落 15+ 处）
-   - `Message.role`、`LoopEvent.type`、`provider.transport`（sdk/httpx）、
-     `ChatRequest.format`、`finish_reason` 等隐式枚举
-   - 硬编码数字：`65536`、`result[:60]`、`max_rounds=8`、`15000`、
-     `_TAVILY_SNIPPET_MAX=200`、`30 days`、`/run/user/1000` 等
-   - 时机：后续单独商讨「配置文件」时一并处理，本次不做。
-2. **事件总线首个真实使用者**：memory 模块入库成功时 emit
+1. **事件总线首个真实使用者**：memory 模块入库成功时 emit
    `memory.saved`；voice 就绪时 emit `voice.ready`，验证事件链路。
-3. **`browser.*` / `loop.set_model` 服务注册**：上述遗留点按需迁移。
-4. **WebUI**：审计查询接口（query_recent / query_summary）为将来
+2. **WebUI**：审计查询接口（query_recent / query_summary）为将来
    WebUI 监控预留，暂未做前端。
+
+> 枚举/魔法字符串收口与配置集中化**已完成**（2026-08-12）：
+> 7 组隐式枚举收为 StrEnum，可调参数进 `config/*.toml`，见 `developDoc/CONFIG.md`。
 
 ## 验证方法
 

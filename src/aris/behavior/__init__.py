@@ -6,13 +6,14 @@
 - register_builtin_tools：注册全部内置工具
 """
 
-from .loop import AgentLoop, LoopEvent
+from .loop import AgentLoop, LoopEvent, LoopEventType
 from .registry import RegisteredTool, ToolRegistry
 from .tools import register_builtin_tools
 
 __all__ = [
     "AgentLoop",
     "LoopEvent",
+    "LoopEventType",
     "RegisteredTool",
     "ToolRegistry",
     "register_builtin_tools",

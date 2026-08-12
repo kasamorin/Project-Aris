@@ -41,9 +41,15 @@ from .session import ChatSession
 # ≈ 真实按键间隔 + timeoutlen，故阈值需略宽
 _ESC_DOUBLE_GAP = 0.8
 
+# ESC 作为 meta 前缀时 prompt_toolkit 的等待时间（调小让双击能被及时识别）
+_ESC_TIMEOUTLEN = 0.2
+
 # 盲文加载动画帧（等待首字到达时旋转，内容开始输出即消失）
 _SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 _SPINNER_INTERVAL = 0.1
+
+# 输入框最大高度（行数）
+_INPUT_MAX_HEIGHT = 5
 
 # 默认鼠标事件处理器（光标定位、滚动等），方案1 中供非 Shift 事件委托
 _DEFAULT_MOUSE_HANDLER = next(
@@ -97,7 +103,7 @@ class ChatTUI:
             prompt=PROMPT_USER,
             accept_handler=self._on_accept,
             history=InMemoryHistory(),
-            height=Dimension(preferred=1, max=5),
+            height=Dimension(preferred=1, max=_INPUT_MAX_HEIGHT),
         )
         self._output_text = ""
         # 状态行：Aris: + 盲文 spinner + 工具名（等待首字期间动态更新）
@@ -117,7 +123,7 @@ class ChatTUI:
         )
         # ESC 作为 meta 前缀时 prompt_toolkit 会等待 timeoutlen 确认是否独立按键，
         # 调小该值让双击 ESC 能被及时识别
-        self.app.timeoutlen = 0.2
+        self.app.timeoutlen = _ESC_TIMEOUTLEN
     # --- 界面渲染 ---
     def _set_output_document(self) -> None:
         """把当前 _output_text 渲染到输出区（bypass_readonly 允许写只读 buffer）。"""

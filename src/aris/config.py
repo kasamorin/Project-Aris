@@ -14,6 +14,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .cfgtoml import config_dir
+
 
 def _load_env_into_environ() -> None:
     """把 .env 中的变量 setdefault 进 os.environ（不覆盖已存在的环境变量）。"""
@@ -45,7 +47,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
 
     # LLM 连接
-    llm_providers_file: Path = Path("providers.toml")
+    llm_providers_file: Path = config_dir() / "providers.toml"
     llm_fallback_timeout: float = 30.0
     llm_error_message: str = (
         "Someone tell Morin there's some problem with my AI."

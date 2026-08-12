@@ -54,7 +54,7 @@ class LLMEngine:
         if not candidates:
             yield from self._handle_failure(
                 NoCandidateError(
-                    f"没有任何提供方支持模型 {request.model_id}，请在 providers.toml 配置",
+                    f"没有任何提供方支持模型 {request.model_id}，请在 config/providers.toml 配置",
                     detail=request.model_id,
                 )
             )

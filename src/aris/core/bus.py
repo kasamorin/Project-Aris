@@ -33,6 +33,10 @@ _services_lock = threading.Lock()
 _subscribers: dict[str, list[Callable[[Any], None]]] = {}
 _subscribers_lock = threading.Lock()
 
+# 服务不存在时的模糊匹配建议参数（给出最相近的已注册目标）
+_MATCH_SUGGESTIONS = 3
+_MATCH_CUTOFF = 0.5
+
 
 def provide(service: str, fn: Callable[..., Any]) -> None:
     """注册一个服务（同步调用，可有返回值）。
@@ -94,8 +98,8 @@ def emit(event: str, payload: Any = None) -> None:
         audit.audit_event(event, monotonic() - start, ok=False)
 
 
-def query_recent(limit: int = 50) -> list[audit.AuditRecord]:
-    """查询最近审计流水（新→旧）。"""
+def query_recent(limit: int | None = None) -> list[audit.AuditRecord]:
+    """查询最近审计流水（新→旧）；limit 缺省用配置值。"""
     return audit.query_recent(limit=limit)
 
 
@@ -106,6 +110,6 @@ def query_summary() -> dict[str, Any]:
 
 def _report_missing(kind: str, target: str, known: list[str]) -> None:
     """记录「目标不存在」日志，并给出最相近的已注册目标作为提示。"""
-    close = get_close_matches(target, known, n=3, cutoff=0.5)
+    close = get_close_matches(target, known, n=_MATCH_SUGGESTIONS, cutoff=_MATCH_CUTOFF)
     hint = f"，是不是想调用: {', '.join(close)}" if close else ""
     logger.error(f"{kind} {target} 未注册{hint}")

@@ -1,0 +1,10 @@
+# 联网搜索模块配置（Tavily API）
+
+# HTTP 请求超时（秒）
+timeout_seconds = 15.0
+
+# 返回搜索结果条数
+results_count = 5
+
+# 摘要截断长度（字符，省 token）
+snippet_max_len = 200

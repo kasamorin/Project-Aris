@@ -13,13 +13,16 @@ from __future__ import annotations
 
 import json
 
-from .message import ChatRequest, Message
+from .message import ChatRequest, Message, MessageRole
+
+# DeepSeek 系关闭思考模式的请求体（带 tools 时默认开启思考，导致首字延迟）
+_THINKING_DISABLED_BODY = {"type": "disabled"}
 
 
 def _message_to_openai(msg: Message) -> dict:
     """把一条内部消息翻译成 OpenAI chat 格式。"""
     body: dict = {"role": msg.role, "content": msg.content}
-    if msg.role == "assistant":
+    if msg.role == MessageRole.ASSISTANT:
         # DeepSeek：带 tools 时必须完整回传思考链，否则 400
         if msg.reasoning_content:
             body["reasoning_content"] = msg.reasoning_content
@@ -35,7 +38,7 @@ def _message_to_openai(msg: Message) -> dict:
                 }
                 for tc in msg.tool_calls
             ]
-    elif msg.role == "tool":
+    elif msg.role == MessageRole.TOOL:
         body["tool_call_id"] = msg.tool_call_id
     return body
 
@@ -72,5 +75,5 @@ def to_openai_chat_body(request: ChatRequest, request_name: str) -> dict:
         body["tool_choice"] = request.tool_choice
     if request.thinking is False:
         # DeepSeek 系：显式关闭思考模式（默认开启导致首字延迟）
-        body["thinking"] = {"type": "disabled"}
+        body["thinking"] = _THINKING_DISABLED_BODY
     return body

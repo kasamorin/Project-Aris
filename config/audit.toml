@@ -1,0 +1,7 @@
+# 审计配置（core.bus 通讯流水，内存环形缓冲）
+
+# 环形缓冲上限：最多保留的流水条数（防内存膨胀）
+max_records = 2000
+
+# query_recent 默认返回条数
+recent_default_limit = 50

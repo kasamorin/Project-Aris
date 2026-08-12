@@ -7,7 +7,7 @@
   Python 层足够（KISS + 轮子哲学），C 继续只做性能敏感点。
 
 实现要点：
-- 内存环形缓冲（定长 _MAX_RECORDS），只保留最近 N 条，防内存膨胀。
+- 内存环形缓冲（定长 config/audit.toml max_records），只保留最近 N 条，防内存膨胀。
 - 记录失败静默降级（try/except 包裹），绝不拖累业务调用。
 - 线程安全：多线程（如将来 auto 定时任务模块）并发记录/查询均加锁。
 """
@@ -17,18 +17,36 @@ from __future__ import annotations
 import threading
 from collections import deque
 from dataclasses import dataclass, field
+from enum import StrEnum
 from time import monotonic
 from typing import Any
 
-# 环形缓冲上限：最多保留的流水条数（防内存膨胀）
-_MAX_RECORDS = 2000
+from aris.cfgtoml import load_config
+
+
+class AuditKind(StrEnum):
+    """审计流水类型（服务调用 / 事件发布）。"""
+
+    CALL = "call"
+    EVENT = "event"
+
+
+@dataclass
+class AuditConfig:
+    """审计可调参数（config/audit.toml）。"""
+
+    max_records: int = 2000
+    recent_default_limit: int = 50
+
+
+_audit_config = load_config(AuditConfig(), "audit.toml")
 
 
 @dataclass
 class AuditRecord:
     """一条通讯审计记录。"""
 
-    kind: str          # "call"（服务调用）/ "event"（事件发布）
+    kind: str          # AuditKind（call 服务调用 / event 事件发布）
     target: str        # 服务名（如 llm.stream）或事件名（如 memory.saved）
     ts: float          # 记录时间戳（monotonic 秒）
     duration: float    # 本次调用耗时（秒）
@@ -39,7 +57,7 @@ class AuditRecord:
 class AuditLog:
     """审计流水存储：环形缓冲 + 聚合查询。"""
 
-    def __init__(self, max_records: int = _MAX_RECORDS) -> None:
+    def __init__(self, max_records: int = _audit_config.max_records) -> None:
         self._records: deque[AuditRecord] = deque(maxlen=max_records)
         self._lock = threading.Lock()
 
@@ -68,8 +86,10 @@ class AuditLog:
         except Exception:
             pass  # 审计失败不影响业务
 
-    def recent(self, limit: int = 50) -> list[AuditRecord]:
-        """取最近的流水（新→旧），供调试/查询。"""
+    def recent(self, limit: int | None = None) -> list[AuditRecord]:
+        """取最近的流水（新→旧），供调试/查询。limit 缺省用配置值。"""
+        if limit is None:
+            limit = _audit_config.recent_default_limit
         with self._lock:
             return list(self._records)[-limit:][::-1]
 
@@ -80,7 +100,7 @@ class AuditLog:
         with self._lock:
             records = list(self._records)
         for r in records:
-            agg = calls if r.kind == "call" else events
+            agg = calls if r.kind == AuditKind.CALL else events
             bucket = agg.setdefault(r.target, {"count": 0, "total_ms": 0.0, "errors": 0})
             bucket["count"] += 1
             bucket["total_ms"] += r.duration * 1000.0
@@ -103,16 +123,16 @@ default_audit = AuditLog()
 
 def audit_call(target: str, duration: float, ok: bool = True, detail: str = "") -> None:
     """记录一次服务调用。"""
-    default_audit.record(kind="call", target=target, duration=duration, ok=ok, detail=detail)
+    default_audit.record(kind=AuditKind.CALL, target=target, duration=duration, ok=ok, detail=detail)
 
 
 def audit_event(target: str, duration: float, ok: bool = True, detail: str = "") -> None:
     """记录一次事件发布。"""
-    default_audit.record(kind="event", target=target, duration=duration, ok=ok, detail=detail)
+    default_audit.record(kind=AuditKind.EVENT, target=target, duration=duration, ok=ok, detail=detail)
 
 
-def query_recent(limit: int = 50) -> list[AuditRecord]:
-    """查询最近流水。"""
+def query_recent(limit: int | None = None) -> list[AuditRecord]:
+    """查询最近流水（limit 缺省用配置值）。"""
     return default_audit.recent(limit=limit)
 
 

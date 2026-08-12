@@ -12,6 +12,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
+
+
+class MessageRole(StrEnum):
+    """统一消息角色（OpenAI chat 兼容）。"""
+
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
+
+
+class ApiFormat(StrEnum):
+    """请求格式（当前仅 chat；新增格式在此扩展）。"""
+
+    CHAT = "chat"
+
+
+class FinishReason(StrEnum):
+    """流结束原因（协议透传；目前只判断 tool_calls）。"""
+
+    TOOL_CALLS = "tool_calls"
 
 
 @dataclass
@@ -43,9 +65,9 @@ class ToolDefinition:
 class Message:
     """一条统一消息。
 
-    role: system / user / assistant / tool。
+    role: MessageRole（system / user / assistant / tool）。
     - assistant 纯工具调用轮 content 为 None（内容在 tool_calls）
-    - role="tool" 的结果消息带 tool_call_id 回填
+    - role=TOOL 的结果消息带 tool_call_id 回填
     - reasoning_content 是思考链（DeepSeek：请求带 tools 时必须完整回传，
       否则返回 400，见 API-CALL.md 2.3 节）
     """
@@ -61,14 +83,14 @@ class Message:
 class ChatRequest:
     """统一请求模板。
 
-    format 标记请求格式（当前仅 "chat"），格式化工具据此选择翻译方案。
+    format 标记请求格式（ApiFormat，当前仅 "chat"），格式化工具据此选择翻译方案。
     model_id 是统一模型 id（跨提供方共享），由 fallback 逻辑解析到具体提供方的请求名。
     thinking：None 不传（跟提供方默认）；False 关闭思考模式（DeepSeek 系参数）。
     """
 
     model_id: str
     messages: list[Message]
-    format: str = "chat"
+    format: str = ApiFormat.CHAT
     stream: bool = True
     temperature: float | None = None
     max_tokens: int | None = None
@@ -81,6 +103,6 @@ def plain_chat(model_id: str, text: str, system: str | None = None) -> ChatReque
     """便捷构造：单轮纯文本对话请求。"""
     messages: list[Message] = []
     if system:
-        messages.append(Message(role="system", content=system))
-    messages.append(Message(role="user", content=text))
+        messages.append(Message(role=MessageRole.SYSTEM, content=system))
+    messages.append(Message(role=MessageRole.USER, content=text))
     return ChatRequest(model_id=model_id, messages=messages)

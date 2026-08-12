@@ -1,0 +1,4 @@
+# 桌面通知配置（notify-send，用于 LLM 错误广播）
+
+# 弹窗子进程超时（秒）
+timeout_seconds = 5

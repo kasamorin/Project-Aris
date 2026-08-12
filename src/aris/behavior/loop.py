@@ -15,10 +15,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from enum import StrEnum
 
+from aris.cfgtoml import load_config
 from aris.core.bus import call, provide
 from aris.core.llm.engine import LLMEngine
-from aris.core.llm.message import ChatRequest, Message
+from aris.core.llm.message import ChatRequest, FinishReason, Message, MessageRole
 
 from .registry import ToolRegistry
 
@@ -30,11 +32,30 @@ OnTool = Callable[[str, str], None]
 ShouldStop = Callable[[], bool]
 
 
+class LoopEventType(StrEnum):
+    """agent loop 产出事件类型。"""
+
+    DELTA = "delta"            # 流式文本增量
+    TOOL = "tool"              # 工具已执行（附 name + result）
+    DONE = "done"              # 最终回答结束
+    INTERRUPTED = "interrupted"  # 用户中断（调用方应回滚未完成 user 消息）
+
+
+@dataclass
+class LoopConfig:
+    """agent loop 可调参数（config/chat.toml）。"""
+
+    max_rounds: int = 8
+
+
+_loop_config = load_config(LoopConfig(), "chat.toml")
+
+
 @dataclass
 class LoopEvent:
     """agent loop 的产出事件，供上层（session）驱动流式。"""
 
-    type: str          # delta（文本增量）/ tool（工具已执行）/ done / interrupted
+    type: str          # LoopEventType
     content: str = ""
     name: str = ""
     result: str = ""
@@ -49,12 +70,12 @@ class AgentLoop:
         *,
         registry: ToolRegistry,
         model_id: str,
-        max_rounds: int = 8,
+        max_rounds: int | None = None,
     ) -> None:
         self.engine = engine
         self.registry = registry
         self.model_id = model_id
-        self.max_rounds = max_rounds
+        self.max_rounds = _loop_config.max_rounds if max_rounds is None else max_rounds
         # 注册为统一服务：agent loop 统一走 core.call("loop.run", ...)
         provide("loop.run", self.iter_events)
         provide("loop.set_model", self.set_model)
@@ -89,26 +110,26 @@ class AgentLoop:
             finish_reason: str | None = None
             for delta in call("llm.deltas", request):
                 if should_stop is not None and should_stop():
-                    yield LoopEvent(type="interrupted")
+                    yield LoopEvent(type=LoopEventType.INTERRUPTED)
                     return
                 if delta.content:
                     content += delta.content
-                    yield LoopEvent(type="delta", content=delta.content)
+                    yield LoopEvent(type=LoopEventType.DELTA, content=delta.content)
                 if delta.reasoning:
                     reasoning += delta.reasoning
                 if delta.finish_reason:
                     finish_reason = delta.finish_reason
                     tool_calls = delta.tool_calls or []
 
-            if finish_reason != "tool_calls":
+            if finish_reason != FinishReason.TOOL_CALLS:
                 # 最终回答（或没有工具调用）
-                yield LoopEvent(type="done", content=content)
+                yield LoopEvent(type=LoopEventType.DONE, content=content)
                 return
 
             # 执行工具并回填
             work.append(
                 Message(
-                    role="assistant",
+                    role=MessageRole.ASSISTANT,
                     content=content or None,
                     reasoning_content=reasoning or None,
                     tool_calls=tool_calls,
@@ -116,10 +137,10 @@ class AgentLoop:
             )
             for tc in tool_calls:
                 result = call("tools.execute", tc.name, tc.arguments)
-                yield LoopEvent(type="tool", name=tc.name, result=result)
+                yield LoopEvent(type=LoopEventType.TOOL, name=tc.name, result=result)
                 work.append(
-                    Message(role="tool", content=result, tool_call_id=tc.id)
+                    Message(role=MessageRole.TOOL, content=result, tool_call_id=tc.id)
                 )
 
         # 达到轮数上限：返回最后一次输出（不视为中断）
-        yield LoopEvent(type="done", content=content)
+        yield LoopEvent(type=LoopEventType.DONE, content=content)

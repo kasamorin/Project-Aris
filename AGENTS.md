@@ -136,6 +136,20 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 > 注：config.py 的字段只依赖 `BaseSettings` 的简单 env 读取语义，若未来迁移到
 > 标准库实现，仅需重写 `Settings` 类的读取逻辑，调用方（`get_settings()`）不变。
 
+### 配置体系（2026-08-12 定案：三个配置源各管一摊）
+
+| 配置源 | 管什么 | 状态 |
+|---|---|---|
+| `.env`（`ARIS_` 前缀，pydantic-settings） | 启动级参数、密钥、`data_dir`、`llm_providers_file` | 已有 |
+| `config/providers.toml` | LLM 提供方（base_url/key env 名/超时/transport/模型） | 已移入 config/ |
+| `config/*.toml`（模块级，tomllib 加载） | 功能可调参数：chat / search / logging / audit / notify | 新建 |
+
+- 模块级 toml 优先级：**代码内 dataclass 默认值 < `config/*.toml`**，
+  缺文件/缺键静默用默认；加载器 `aris/cfgtoml.py`（零新依赖）。
+- 收口原则：**枚举=代码 StrEnum**（逻辑类型不进配置）、**实现细节=模块顶部常量**、
+  **真正可调参数才进 toml**。密钥永远只在 `.env`。
+- 详情见 `developDoc/CONFIG.md`。
+
 ## 数据与密钥
 
 - 运行时数据（日志、数据库文件等）统一放 `data/`，**不进 git**
@@ -222,6 +236,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | 开发内容 | 必读文档 |
 |---|---|
 | LLM 接入 / `core` 模块 | `developDoc/API-CALL.md` |
+| 配置文件体系（三源分工 / 收口原则） | `developDoc/CONFIG.md` |
 | 统一通讯层（`core.bus` 服务/事件/审计） | `developDoc/BUS-ARCHITECTURE.md` |
 | 联网搜索方案（演进历史 / 留档） | `developDoc/WEB-SEARCH.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |

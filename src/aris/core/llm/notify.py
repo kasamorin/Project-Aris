@@ -9,14 +9,33 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass
 from typing import Callable
 
 from loguru import logger
+
+from aris.cfgtoml import load_config
 
 # 广播处理器：title, message -> None。可通过 register_push 注册手机推送等。
 PushHandler = Callable[[str, str], None]
 
 _handlers: list[PushHandler] = []
+
+# Linux 常规默认运行时目录；非 Linux 或无法探测时退化为空
+if hasattr(os, "getuid"):
+    _DEFAULT_XDG_RUNTIME_DIR = f"/run/user/{os.getuid()}"
+else:
+    _DEFAULT_XDG_RUNTIME_DIR = ""
+
+
+@dataclass
+class NotifyConfig:
+    """桌面通知可调参数（config/notify.toml）。"""
+
+    timeout_seconds: float = 5.0
+
+
+_notify_config = load_config(NotifyConfig(), "notify.toml")
 
 
 def register_push(handler: PushHandler) -> None:
@@ -43,8 +62,13 @@ def _desktop_notify(title: str, message: str) -> None:
         subprocess.run(
             ["notify-send", "--urgency=critical", "--app-name=Aris", title, message],
             check=False,
-            timeout=5,
-            env={**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")},
+            timeout=_notify_config.timeout_seconds,
+            env={
+                **os.environ,
+                "XDG_RUNTIME_DIR": os.environ.get(
+                    "XDG_RUNTIME_DIR", _DEFAULT_XDG_RUNTIME_DIR
+                ),
+            },
         )
     except Exception as e:
         logger.warning(f"桌面弹窗失败: {e}")

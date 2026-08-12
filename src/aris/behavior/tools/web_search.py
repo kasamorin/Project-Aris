@@ -14,14 +14,33 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
+from enum import StrEnum
 
+from aris.cfgtoml import load_config
 from ..registry import ToolRegistry
 
-# Tavily API
+
+class WebSearchResultType(StrEnum):
+    """联网搜索工具返回结果的外层标识。"""
+
+    RESULTS = "web_search_results"  # 搜索成功
+    ERROR = "web_search_error"      # 搜索失败（宽容降级）
+
+
+@dataclass
+class SearchConfig:
+    """联网搜索可调参数（config/search.toml）。"""
+
+    timeout_seconds: float = 15.0
+    results_count: int = 5
+    snippet_max_len: int = 200
+
+
+_search_config = load_config(SearchConfig(), "search.toml")
+
+# Tavily API 端点（固定实现细节，不可调）
 _TAVILY_URL = "https://api.tavily.com/search"
-_TAVILY_RESULTS = 5
-# Tavily 返回页面正文，首期只要摘要，截断到该长度省 token
-_TAVILY_SNIPPET_MAX = 200
 
 
 def _tavily_search(query: str) -> str:
@@ -36,10 +55,10 @@ def _tavily_search(query: str) -> str:
         json={
             "api_key": key,
             "query": query,
-            "max_results": _TAVILY_RESULTS,
+            "max_results": _search_config.results_count,
             "include_answer": False,
         },
-        timeout=15.0,
+        timeout=_search_config.timeout_seconds,
     )
     resp.raise_for_status()
     data = resp.json()
@@ -48,8 +67,8 @@ def _tavily_search(query: str) -> str:
         title = item.get("title", "")
         url = item.get("url", "")
         snippet = item.get("content", "")
-        if len(snippet) > _TAVILY_SNIPPET_MAX:
-            snippet = snippet[:_TAVILY_SNIPPET_MAX] + "…"
+        if len(snippet) > _search_config.snippet_max_len:
+            snippet = snippet[:_search_config.snippet_max_len] + "…"
         lines.append(f"{idx}. [{title}]({url})")
         if snippet:
             lines.append(f"   {snippet}")
@@ -65,7 +84,7 @@ def _do_web_search(query: str) -> str:
     except Exception as e:  # noqa: BLE001 —— 搜索失败宽容降级为错误文本
         return json.dumps(
             {
-                "type": "web_search_error",
+                "type": WebSearchResultType.ERROR,
                 "query": query,
                 "error": f"联网搜索失败：{e}",
             },
@@ -73,7 +92,7 @@ def _do_web_search(query: str) -> str:
         )
     return json.dumps(
         {
-            "type": "web_search_results",
+            "type": WebSearchResultType.RESULTS,
             "query": query,
             "engine": "tavily",
             "results": markdown,

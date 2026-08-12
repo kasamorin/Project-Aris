@@ -18,7 +18,7 @@ from typing import Iterator
 import httpx
 from loguru import logger
 
-from .config import LLMProvider
+from .config import LLMProvider, TransportKind
 from .errors import (
     AuthError,
     LLMError,
@@ -47,7 +47,7 @@ class StreamDelta:
 
 def stream_chat(provider: LLMProvider, request: ChatRequest, timeout: float) -> Iterator[StreamDelta]:
     """按提供方配置的传输方式流式请求 chat 格式。"""
-    if provider.transport == "httpx":
+    if provider.transport == TransportKind.HTTPX:
         yield from _stream_httpx(provider, request, timeout)
     else:
         yield from _stream_openai_sdk(provider, request, timeout)

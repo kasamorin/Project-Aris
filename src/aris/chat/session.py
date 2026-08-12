@@ -14,13 +14,15 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from aris.cfgtoml import load_config
 from ..behavior import (
     AgentLoop,
+    LoopEventType,
     ToolRegistry,
     register_builtin_tools,
 )
 from ..core import call
-from ..core.llm import ChatRequest, LLMEngine, Message
+from ..core.llm import ChatRequest, LLMEngine, Message, MessageRole
 from .commands import (
     COMMAND_HELP,
     PROMPT_ARIS,
@@ -41,8 +43,16 @@ TOOLS_SYSTEM_HINT = (
     "当需要实时信息（如当前时间、资料搜索）时使用提供的工具，使用前简单说明一句。"
 )
 
-# 单个对话日志文件大小上限（超出后新建 chat.log.1、chat.log.2 ...）
-_CHAT_LOG_ROTATION = 10 * 1024 * 1024
+
+@dataclass
+class ChatConfig:
+    """chat 模块可调参数（config/chat.toml）。"""
+
+    log_rotation_bytes: int = 10 * 1024 * 1024
+    tool_result_preview_len: int = 60
+
+
+_chat_config = load_config(ChatConfig(), "chat.toml")
 
 
 @dataclass
@@ -57,11 +67,11 @@ class CommandResult:
 def _chat_log_path(log_dir: Path) -> Path:
     """取当日对话日志路径；文件超限时依次切新文件（.1 .2 ...）。"""
     base = log_dir / "chat.log"
-    if base.exists() and base.stat().st_size >= _CHAT_LOG_ROTATION:
+    if base.exists() and base.stat().st_size >= _chat_config.log_rotation_bytes:
         index = 1
         while True:
             candidate = log_dir / f"chat.log.{index}"
-            if not candidate.exists() or candidate.stat().st_size < _CHAT_LOG_ROTATION:
+            if not candidate.exists() or candidate.stat().st_size < _chat_config.log_rotation_bytes:
                 return candidate
             index += 1
     return base
@@ -95,11 +105,15 @@ class ChatSession:
         *,
         model_id: str,
         system_prompt: str = ARIS_SYSTEM_PROMPT,
-        data_dir: Path = Path("data"),
+        data_dir: Path | None = None,
         thinking: bool = False,
         tools_enabled: bool = True,
         registry: ToolRegistry | None = None,
     ) -> None:
+        if data_dir is None:
+            from ..config import get_settings
+
+            data_dir = get_settings().data_dir
         self.engine = engine
         self.model_id = model_id
         self._system_prompt = system_prompt
@@ -110,7 +124,7 @@ class ChatSession:
         if tools_enabled:
             register_builtin_tools(self.registry)
             system_prompt = f"{system_prompt} {TOOLS_SYSTEM_HINT}"
-        self.history: list[Message] = [Message(role="system", content=system_prompt)]
+        self.history: list[Message] = [Message(role=MessageRole.SYSTEM, content=system_prompt)]
         self._loop = AgentLoop(
             engine, registry=self.registry, model_id=model_id
         )
@@ -120,7 +134,7 @@ class ChatSession:
 
     def new(self) -> str:
         """清空对话历史，开启新会话（保留系统提示词），返回反馈文本。"""
-        self.history = [Message(role="system", content=self._system_prompt)]
+        self.history = [Message(role=MessageRole.SYSTEM, content=self._system_prompt)]
         return "已开启新会话，对话历史已清空。"
 
     def set_model(self, model_id: str) -> str:
@@ -168,25 +182,25 @@ class ChatSession:
         经 on_tool 回调通知。回复完成后把该轮问答写入对话日志。
         若 should_stop 回调返回 True，则中断并回滚未完成的 user 消息。
         """
-        self.history.append(Message(role="user", content=text))
+        self.history.append(Message(role=MessageRole.USER, content=text))
         interrupted = False
         reply = ""
         for event in call("loop.run", list(self.history), thinking=self.thinking, should_stop=should_stop):
-            if event.type == "delta":
+            if event.type == LoopEventType.DELTA:
                 yield event.content
-            elif event.type == "tool":
+            elif event.type == LoopEventType.TOOL:
                 if on_tool is not None:
                     on_tool(event.name, event.result)
-            elif event.type == "interrupted":
+            elif event.type == LoopEventType.INTERRUPTED:
                 interrupted = True
                 break
-            elif event.type == "done":
+            elif event.type == LoopEventType.DONE:
                 reply = event.content
         if interrupted:
-            if self.history and self.history[-1].role == "user":
+            if self.history and self.history[-1].role == MessageRole.USER:
                 self.history.pop()  # 撤掉未完成轮次的用户消息
             return
-        self.history.append(Message(role="assistant", content=reply))
+        self.history.append(Message(role=MessageRole.ASSISTANT, content=reply))
         self._append_log(text, reply)
 
     def _append_log(self, user_text: str, reply: str) -> None:
@@ -232,7 +246,7 @@ class ChatSession:
             for delta in self.ask(
                 user_text,
                 on_tool=lambda name, result: print(
-                    f"\n  [调用工具 {name} → {result[:60]}]\n",
+                    f"\n  [调用工具 {name} → {result[:_chat_config.tool_result_preview_len]}]\n",
                     end="",
                     flush=True,
                 ),

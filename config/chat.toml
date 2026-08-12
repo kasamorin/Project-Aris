@@ -1,0 +1,11 @@
+# chat 模块配置（agent loop / 会话 / 对话日志）
+# 缺省即用代码内默认值；本文件为完整可调项清单
+
+# agent loop 最多执行轮数（LLM↔工具循环，防死循环）
+max_rounds = 8
+
+# 对话日志文件轮转阈值（字节，超过后切 chat.log.1、chat.log.2 ...）
+log_rotation_bytes = 10485760
+
+# 非 TUI 环境下工具结果预览截断长度（字符）
+tool_result_preview_len = 60
