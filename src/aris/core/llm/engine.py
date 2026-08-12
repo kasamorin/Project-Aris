@@ -14,6 +14,7 @@ from collections.abc import Iterator
 
 from loguru import logger
 
+from ..bus import provide
 from .config import ProviderConfig
 from .errors import LLMError, NoCandidateError, is_retryable
 from .message import ChatRequest
@@ -27,6 +28,9 @@ class LLMEngine:
         self.providers = providers
         self.timeout = timeout  # 总体超时预算（秒）
         self.error_message = error_message
+        # 注册为统一服务（实例自注册，重名覆盖会记警告）
+        provide("llm.stream", self.stream)        # 纯文本流式（简单场景）
+        provide("llm.deltas", self.stream_deltas)  # 完整增量流式（agent loop 用）
 
     def stream(self, request: ChatRequest) -> Iterator[str]:
         """纯文本流式：过滤掉完成事件，只产出文本增量。

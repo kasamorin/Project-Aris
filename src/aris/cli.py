@@ -53,6 +53,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 
 def _cmd_llm_test(args: argparse.Namespace) -> int:
     """手动验证 LLM 连接：流式对话一次，展示 fallback / 错误处理。"""
+    from aris.core import call
     from aris.core.llm import LLMEngine, load_providers, plain_chat
 
     settings = get_settings()
@@ -69,7 +70,7 @@ def _cmd_llm_test(args: argparse.Namespace) -> int:
         system=args.system,
     )
     print("Aris: ", end="", flush=True)
-    for delta in engine.stream(request):
+    for delta in call("llm.stream", request):
         print(delta, end="", flush=True)
     print()
     return 0

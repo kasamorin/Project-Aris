@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from aris.core.bus import provide
 from aris.core.llm.message import ToolDefinition
 
 # 工具执行函数：接收关键字参数（已由模型按 schema 填好），返回任意可序列化结果
@@ -30,6 +31,8 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._tools: dict[str, RegisteredTool] = {}
+        # 注册为统一服务：工具执行统一走 core.call("tools.execute", ...)
+        provide("tools.execute", self.execute)
 
     def register(
         self,

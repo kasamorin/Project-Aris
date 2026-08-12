@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
+from aris.core.bus import call, provide
 from aris.core.llm.engine import LLMEngine
 from aris.core.llm.message import ChatRequest, Message
 
@@ -54,6 +55,8 @@ class AgentLoop:
         self.registry = registry
         self.model_id = model_id
         self.max_rounds = max_rounds
+        # 注册为统一服务：agent loop 统一走 core.call("loop.run", ...)
+        provide("loop.run", self.iter_events)
 
     def iter_events(
         self,
@@ -79,7 +82,7 @@ class AgentLoop:
             reasoning = ""
             tool_calls: list = []
             finish_reason: str | None = None
-            for delta in self.engine.stream_deltas(request):
+            for delta in call("llm.deltas", request):
                 if should_stop is not None and should_stop():
                     yield LoopEvent(type="interrupted")
                     return
@@ -107,7 +110,7 @@ class AgentLoop:
                 )
             )
             for tc in tool_calls:
-                result = self.registry.execute(tc.name, tc.arguments)
+                result = call("tools.execute", tc.name, tc.arguments)
                 yield LoopEvent(type="tool", name=tc.name, result=result)
                 work.append(
                     Message(role="tool", content=result, tool_call_id=tc.id)

@@ -21,6 +21,7 @@ from ..behavior import (
     cleanup_stale_browser_processes,
     register_builtin_tools,
 )
+from ..core import call
 from ..core.llm import ChatRequest, LLMEngine, Message
 from .commands import (
     COMMAND_HELP,
@@ -173,11 +174,7 @@ class ChatSession:
         self.history.append(Message(role="user", content=text))
         interrupted = False
         reply = ""
-        for event in self._loop.iter_events(
-            list(self.history),
-            thinking=self.thinking,
-            should_stop=should_stop,
-        ):
+        for event in call("loop.run", list(self.history), thinking=self.thinking, should_stop=should_stop):
             if event.type == "delta":
                 yield event.content
             elif event.type == "tool":
