@@ -1,6 +1,6 @@
 # 开发进度报告
 
-更新于：2026-08-09（Arch Linux 会话）
+更新于：2026-08-12（Arch Linux 会话）
 
 ## 已完成
 
@@ -60,12 +60,37 @@
   - Tavily API 为主链路（`.env` 里 `TAVILY_API_KEY`），返回外层 JSON
     （`web_search_results` 标识）+ 内部 markdown 列表（每条带自增 id 供后续
     `web_open` 点开），摘要截断省 token
-  - 浏览器链路（`behavior/browser.py` 管理 Playwright Firefox 生命周期、
-    `behavior/web.py` Bing/Google 解析）代码保留：官方不支持品牌版 Firefox，
-    headless 下 Bing/Google 均触发验证码，作为将来有头模式/换引擎的扩展点
-  - chat 会话持有 BrowserManager（惰性启动、会话结束 close 释放）
+  - 浏览器链路（Playwright Firefox）已于 2026-08-12 **代码删除**，历史与
+    恢复要点留档 `developDoc/WEB-SEARCH.md`
   - 验证：真实模型「查 Python 3.14 新特性」正确触发 web_search → Tavily 返回
     结果 → 模型消化并给出准确总结
+- **人格系统（简单版，2026-08-12）**：提示词工程起步，`persona/` 模块落地。
+  - 人设文本轻量结构化（简介/性格/语气/边界），从 chat 的一行描述独立成模块
+  - 注册 `persona.system_prompt` 服务，session 默认人设改经 `core.call` 获取，
+    `--system` 仍可覆盖；服务缺失时用兜底文本（宽容降级）
+  - 验证：真实模型默认人设（体现新结构化人设）与 `--system` 覆盖均正确
+  - 世界观/人际关系/成长轨迹后续在此演进；实现方式（提示词工程 vs MCP）后续再议
+- **统一通讯层（2026-08-12）**：`core/bus` 服务注册表 + 事件总线 + 审计统计。
+  - 模块间通讯统一经 `core.call` / `core.provide`，模块间不再直接 import 跨模块调用
+  - 核心类实例自注册（`__init__` 里 `provide` 自己的方法），命名 `module.service`
+  - 已注册服务：`llm.stream` / `llm.deltas` / `tools.execute` / `loop.run` /
+    `loop.set_model` / `persona.system_prompt`；核心链路（chat→loop→llm/tools）
+    已全部走总线
+  - 明确不走总线的边界：对象构造/装配、同模块内部调用、纯类型引用（Message 等）
+  - 详 `developDoc/BUS-ARCHITECTURE.md`
+- **联网搜索精简（2026-08-12）**：Playwright 浏览器链路**代码删除**（从未真正
+  生效，headless 下 Bing/Google 全触发验证码，Tavily 一直兜底），Tavily 成为
+  唯一主链路，工具简化为 `web_search(query)`；移除 playwright 依赖。
+  历史与恢复要点留档 `developDoc/WEB-SEARCH.md`
+- **配置体系定案（2026-08-12）**：三个配置源各管一摊。
+  - `.env`（ARIS_ 前缀）：启动级/密钥/data_dir/llm_providers_file
+  - `config/providers.toml`：LLM 提供方（已从根目录移入）
+  - `config/*.toml`（chat/search/logging/audit/notify）：功能可调参数，
+    新加载器 `aris/cfgtoml.py`（零新依赖，dataclass 默认值 < toml）
+  - 7 组隐式枚举收口为 StrEnum（MessageRole / LoopEventType / TransportKind /
+    ApiFormat / FinishReason / WebSearchResultType / AuditKind），~35 处魔法
+    字符串替换；实现细节保持模块顶部常量；data 路径统一从 Settings.data_dir 取
+  - 详 `developDoc/CONFIG.md`
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
@@ -78,23 +103,23 @@
 
 - 记忆架构（三层记忆模型，构想中、未完善，可能换）
 - STT 选型
-- persona 实现方式（提示词工程 vs MCP，模块已搁置）
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
 - 测试框架是否启用 pytest
 - 打断 vs 缓存输入策略（见 AGENTS.md 待定节）
 - Google 搜索接入方式：Custom Search JSON API 已停新申请（2027-01 停服），
   候选 Gemini API Grounding（每日免费额度）或有头模式过反爬，实现前再定
+- ~~persona 实现方式~~（已定：提示词工程起步，2026-08-12，见 AGENTS.md）
 
 ## 已知问题（待修）
 
-- **运行 `aris chat` 偶发 Node.js EPIPE 崩溃（2026-08-09，已修复）**：报错
-  `node:events:487 throw er; Error: write EPIPE`（Node v24.18.1），
-  发生在 `uv run aris chat` 启动时。疑似上次会话残留的 Playwright node
-  driver 孤儿进程向断裂管道写入所致（普通 chat 启动路径不触发浏览器）。
-  已实现 `cleanup_stale_browser_processes()`（behavior/browser.py）：按
-  「当前环境 playwright driver 路径 + 本 profile 目录」精确匹配并清理残留
-  孤儿进程与 profile 锁，在 `BrowserManager.start()` 与 `ChatSession.__init__`
-  两个时点调用。脚本验证通过，**待真机验证**（当前远程无显示器）。
+- **运行 `aris chat` 偶发 Node.js EPIPE 崩溃（2026-08-09，已解决）**：报错
+  `node:events:487 throw er; Error: write EPIPE`（Node v24.18.1），发生在
+  `uv run aris chat` 启动时。疑因上次会话残留的 Playwright node driver 孤儿
+  进程向断裂管道写入所致（当时已加 cleanup 清理，但未真机验证）。
+  **2026-08-12 浏览器链路整体删除后，playwright / node 依赖不复存在，Aris
+  不再有任何 node 进程来源**（已核实 pyproject/uv.lock 无依赖、src 无残留代码、
+  系统无残留进程），实际运行 `aris chat` 验证不再崩溃。历史与清理方案留档
+  `developDoc/WEB-SEARCH.md`
 - **TUI 状态行覆盖（2026-08-09，已修复）**：模型调用工具前若先输出了文字（如
   "我搜一下"），工具调用提示会把那段文字覆盖掉（`_show_tool` 直接截断
   到 `_state_start`）；且调用完输出紧跟同一行、无空格。已改 `_show_tool`
@@ -117,9 +142,10 @@
 
 ## 下一步
 
-1. ~~跑通文字对话~~（已完成，`aris chat`）→ 记忆系统（PostgreSQL + pgvector）
-2. 行为扩展续：联网搜索（**已完成**：Tavily 主链路 + 浏览器扩展点，见 AGENTS.md
-   定案节）、web_open（按 id 点开读正文）、MCP 服务器、Skills
+1. 人格模块（**进行中**，2026-08-12）：提示词工程起步，把 system prompt 独立
+   成 `persona` 模块，后续演进世界观/关系网等 → 记忆系统（PostgreSQL + pgvector）
+2. 行为扩展续：web_open（按 id 点开读正文）、MCP 服务器、Skills
+   （联网搜索已完成：Tavily 唯一主链路）
 3. 语音链路（STT → LLM → TTS）
 
 ## 专项优化（暂缓）

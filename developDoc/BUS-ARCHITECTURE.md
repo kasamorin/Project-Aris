@@ -115,6 +115,7 @@ summary = query_summary()            # 聚合统计
 | `tools.execute` | `ToolRegistry.__init__` | 执行工具，返回文本结果 | `behavior/loop.py` |
 | `loop.run` | `AgentLoop.__init__` | 跑完整「LLM↔工具」循环，产出事件流 | `chat/session.py` |
 | `loop.set_model` | `AgentLoop.__init__` | 切换模型：更新 loop 内部 model id | `chat/session.py` |
+| `persona.system_prompt` | `persona/__init__.py` | 返回 Aris 系统提示词 | `chat/session.py`（默认人设，`--system` 可覆盖） |
 
 > 注：曾规划 `browser.close` / `browser.cleanup` 服务，因浏览器链路
 > （Playwright）已整体删除（2026-08-12，见 `developDoc/WEB-SEARCH.md`），
@@ -128,6 +129,15 @@ summary = query_summary()            # 聚合统计
   自身注册 `loop.run`。
 - `chat/session.py`：调 `loop.run` 走总线。
 - `cli.py` `llm test`：调 `llm.stream` 走总线。
+
+### 已迁移（第二批：persona，2026-08-12）
+
+- `persona/__init__.py`：模块级 `provide("persona.system_prompt")`。
+- `chat/session.py`：默认系统提示词从本地硬编码改为
+  `call("persona.system_prompt")`（服务缺失时用兜底文本），`--system` 可覆盖。
+
+> 注：persona 无核心类实例，采用模块级注册（import 即注册）；服务注册表是
+> 全局的，模块加载顺序无关紧要——session 在构造时经 call 获取即可。
 
 ### 明确不走总线（设计边界）
 

@@ -158,16 +158,27 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 模块划分（对应 Project-Aris.md 蓝图）
 
-- `core/` —— 基础设施：Agent 核心 + 一切外部基础连接（LLM API 等）的统一出入口（提供方抽象）
+- `core/` —— 基础设施：统一通讯层（`bus.py` 服务注册表 + 事件总线 + 审计）+
+  LLM 提供方抽象（多提供方 fallback、流式、工具调用）
 - `memory/` —— 记忆系统：Embedding + 数据库
 - `voice/` —— STT（语音识别）、TTS（语音合成）
-- `persona/` —— **已搁置**：人格系统，实现方式未定（提示词工程 vs MCP）
+- `persona/` —— 人格系统（提示词工程起步，2026-08-12）：注册
+  `persona.system_prompt` 服务，其他模块经 `core.call` 取人设，不再硬编码；
+  世界观/人际关系/成长轨迹后续在此演进
 - `behavior/` —— 行为（函数调用已实现）：`registry.py` 工具注册表、`loop.py` agent loop
   （LLM↔工具循环）、`tools/` 内置工具集；MCP / Skills 后续作为工具来源注册进 registry
 - `chat/` —— 文字对话（已实现）：`session.py`（会话逻辑）、`tui.py`（全屏界面）、
   `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
   届时再评估是否独立成模块
+
+### 模块间调用规则（统一通讯层，2026-08-12 定案）
+
+- 模块间通讯**一律走 `core.call` / `core.provide`**，不直接跨模块 import 调用
+- 核心类实例自注册（`__init__` 里 `provide` 自己的方法），命名 `module.service`
+- 明确不走总线的边界：对象构造/装配（依赖注入）、同模块内部调用、纯类型引用
+  （如 Message）；CLI 组装根可保持直接引用
+- 服务表与架构详见 `developDoc/BUS-ARCHITECTURE.md`
 
 ## 开发路线（当前处于第一阶段）
 
@@ -176,10 +187,11 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 2. 接入 LLM —— **已完成**（2026-08-09，`core/llm`，见 PROGRESS.md）
 3. 跑通文字对话 —— **已完成**（2026-08-09，`aris chat`，见 PROGRESS.md）
 4. 记忆系统（PostgreSQL + pgvector）
-5. 人格系统 —— **搁置**，实现方式未定（提示词工程 vs MCP）
+5. 人格系统 —— **提示词工程起步，已完成简单版**（2026-08-12，`persona/`）；
+   世界观/人际关系/成长轨迹后续演进
 6. 语音链路（STT → LLM → TTS）
 7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
-   MCP / Skills / 联网搜索待后续
+   MCP / Skills / web_open 待后续；联网搜索已完成（Tavily 唯一主链路）
 8. GraphRAG
 
 ## 已定案（直接照做，无需再确认）
@@ -217,13 +229,18 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   API 已停新申请（2027-01 停服），可考虑 Gemini API Grounding（每日免费额度）
   接 Google 搜索
 - **TTS**：Edge TTS 起步（免费），Azure TTS 备选
+- **人格系统（2026-08-12）**：**提示词工程起步**（persona 模块），注册
+  `persona.system_prompt` 服务，chat 默认经 `core.call` 取人设，`--system` 可覆盖；
+  人设文本轻量结构化（简介/性格/语气/边界），世界观/人际关系/成长轨迹后续演进。
+  提示词工程 vs MCP 之争暂以提示词工程落地，未来可按需再议
 
 ## 待定（勿替用户做决定）
 
 - 记忆架构：三层记忆模型（感觉/短期/长期，含反思、遗忘权重、时间线冲突处理）
   用户构想中、未完善、以后可能换
 - STT 选型（候选：Groq Whisper / 通义听悟）
-- 人格系统实现方式（提示词工程 vs MCP，persona 模块已搁置）
+- 人格系统实现方式（提示词工程 vs MCP）—— **提示词工程已落地**（2026-08-12，
+  persona 模块）；未来是否引入 MCP 按需再议
 - **打断 vs 缓存输入策略（未定）**：Aris 流式回复期间用户提前输入的文本，当前
   TUI 直接丢弃（`_discard_pending_input`）。未来可能改为：缓存输入 → 按场景判断
   —— 交给 Aris（相当于「打断 + 继续听」）或丢弃并假装没听见（「装没听见」）。
