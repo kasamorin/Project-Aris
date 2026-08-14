@@ -121,6 +121,7 @@ class ChatSession:
             system_prompt = _default_system_prompt()
         self.engine = engine
         self.model_id = model_id
+        self._default_model = engine.providers.resolve_default_model()
         self._system_prompt = system_prompt
         self.available_models = engine.providers.all_model_ids()
         self.thinking = thinking  # 默认关闭思考模式（首字更快），--thinking 开启
@@ -177,7 +178,10 @@ class ChatSession:
         if parsed.name == "model":
             if parsed.arg:
                 return CommandResult(text=self.set_model(parsed.arg))
-            models = "\n".join(f"  {mid}" for mid in self.available_models)
+            models = "\n".join(
+                f"  {mid}{'  [默认]' if mid == self._default_model else ''}"
+                for mid in self.available_models
+            )
             return CommandResult(text=f"当前模型：{self.model_id}\n可用模型：\n{models}")
         return CommandResult(text=f"未知指令 /{parsed.name}，输入 /help 查看可用指令")
 

@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from loguru import logger
+
 from .message import ApiFormat
 
 
@@ -26,12 +28,21 @@ class TransportKind(StrEnum):
 
 @dataclass
 class LLMModel:
-    """统一模型定义（跨提供方共享 id，用于 fallback 匹配）。"""
+    """统一模型定义（跨提供方共享 id，用于 fallback 匹配）。
+
+    context_length：上下文窗口（tokens），供展示与后续自动选型。
+    capabilities：能力关键词列表，约定 tools / reasoning / vision。
+    thinking_default：默认思考模式开关；None=跟随提供方默认，
+        False=默认关闭（请求体加 thinking:{"type":"disabled"}）。
+    """
 
     id: str
     name: str
     request_name: str
     formats: list[str] = field(default_factory=lambda: [ApiFormat.CHAT])
+    context_length: int | None = None
+    capabilities: list[str] = field(default_factory=list)
+    thinking_default: bool | None = None
 
 
 @dataclass
@@ -60,10 +71,11 @@ class ProviderConfigError(FileNotFoundError):
 
 @dataclass
 class ProviderConfig:
-    """提供方集合 + 尝试顺序。"""
+    """提供方集合 + 尝试顺序 + 默认模型。"""
 
     providers: list[LLMProvider]
     order: list[str]
+    default_model: str | None = None
 
     def ordered_providers(self) -> list[LLMProvider]:
         """按默认顺序返回提供方：order 中的 id 在前，其余按文件出现顺序补齐。"""
@@ -94,17 +106,43 @@ class ProviderConfig:
                     ids.append(m.id)
         return ids
 
+    def resolve_default_model(self) -> str:
+        """返回默认模型 id。
+
+        配置了 default_model 且存在 → 直接返回；缺失/无效时兜底取
+        order 第一个提供方的第一个模型，并记警告。
+        """
+        if self.default_model:
+            if self.default_model in self.all_model_ids():
+                return self.default_model
+            logger.warning(
+                f"default_model {self.default_model} 在任一提供方中不存在，"
+                "兜底取第一个可用模型"
+            )
+        else:
+            logger.warning("default_model 未配置，兜底取第一个可用模型")
+        first = self.ordered_providers()
+        if first and first[0].models:
+            return first[0].models[0].id
+        raise ProviderConfigError(
+            "没有任何可用模型，请在 config/providers.toml 至少配置一个模型"
+        )
+
 
 def load_providers(path: str | Path) -> ProviderConfig:
     """从 toml 文件加载提供方配置。
 
     结构：
         default_provider_order = ["deepseek"]
+        default_model = "deepseek-v4-flash"
         [[providers.provider]]
         id = "deepseek"
         ...
         [[providers.provider.models]]
         id = "deepseek-v4-flash"
+        context_length = 1000000
+        capabilities = ["tools", "reasoning"]
+        thinking_default = false
     """
     p = Path(path)
     if not p.exists():
@@ -116,23 +154,43 @@ def load_providers(path: str | Path) -> ProviderConfig:
 
     entries = data.get("providers", {}).get("provider", [])
     providers: list[LLMProvider] = []
+    seen_provider_ids: set[str] = set()
     for entry in entries:
         try:
-            models = [
-                LLMModel(
-                    id=m["id"],
-                    name=m.get("name", m["id"]),
-                    request_name=m.get("request_name", m["id"]),
-                    formats=m.get("formats", [ApiFormat.CHAT]),
+            pid = entry["id"]
+            if pid in seen_provider_ids:
+                raise ProviderConfigError(
+                    f"config/providers.toml 提供方 id 重复: {pid}"
                 )
-                for m in entry.get("models", [])
-            ]
+            seen_provider_ids.add(pid)
+
+            models: list[LLMModel] = []
+            seen_model_ids: set[str] = set()
+            for m in entry.get("models", []):
+                mid = m["id"]
+                if mid in seen_model_ids:
+                    raise ProviderConfigError(
+                        f"提供方 {pid} 内模型 id 重复: {mid}"
+                    )
+                seen_model_ids.add(mid)
+                models.append(
+                    LLMModel(
+                        id=mid,
+                        name=m.get("name", mid),
+                        request_name=m.get("request_name", mid),
+                        formats=m.get("formats", [ApiFormat.CHAT]),
+                        context_length=m.get("context_length"),
+                        capabilities=list(m.get("capabilities", [])),
+                        thinking_default=m.get("thinking_default"),
+                    )
+                )
+
             providers.append(
                 LLMProvider(
-                    id=entry["id"],
-                    name=entry.get("name", entry["id"]),
+                    id=pid,
+                    name=entry.get("name", pid),
                     base_url=entry["base_url"],
-                    api_key_env=entry.get("api_key_env", f"{entry['id'].upper()}_API_KEY"),
+                    api_key_env=entry.get("api_key_env", f"{pid.upper()}_API_KEY"),
                     timeout=float(entry.get("timeout", 30.0)),
                     transport=entry.get("transport", TransportKind.SDK),
                     models=models,
@@ -144,4 +202,7 @@ def load_providers(path: str | Path) -> ProviderConfig:
             ) from e
 
     order = list(data.get("default_provider_order", []))
-    return ProviderConfig(providers=providers, order=order)
+    default_model = data.get("default_model")
+    return ProviderConfig(
+        providers=providers, order=order, default_model=default_model
+    )

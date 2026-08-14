@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
+from dataclasses import replace
 
 from loguru import logger
 
@@ -69,8 +70,14 @@ class LLMEngine:
             attempt_timeout = min(provider.timeout, remaining)
             logger.info(f"尝试提供方 {provider.id}（模型 {request.model_id}）")
             try:
+                # 未显式指定 thinking 时，按该模型配置的 thinking_default 解析
+                # （如 deepseek-v4-flash-free 默认关闭思考，消除首字延迟）
+                effective = request
+                model = provider.get_model(request.model_id)
+                if request.thinking is None and model is not None and model.thinking_default is not None:
+                    effective = replace(request, thinking=model.thinking_default)
                 emitted = False
-                for delta in stream_chat(provider, request, timeout=attempt_timeout):
+                for delta in stream_chat(provider, effective, timeout=attempt_timeout):
                     # 透传文本增量 + 完成事件（content 为空但 finish_reason 有值）
                     if delta.content or delta.reasoning or delta.finish_reason:
                         emitted = True

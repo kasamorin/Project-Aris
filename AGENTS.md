@@ -258,6 +258,16 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   `persona.system_prompt` 服务，chat 默认经 `core.call` 取人设，`--system` 可覆盖；
   人设文本轻量结构化（简介/性格/语气/边界），世界观/人际关系/成长轨迹后续演进。
   提示词工程 vs MCP 之争暂以提示词工程落地，未来可按需再议
+- **提供商/模型管理（2026-08-14）**：`providers.toml` 顶层 `default_model`
+  为默认统一模型 id（CLI 无 `--model` 时用，缺失自动兜底第一可用模型）；
+  `LLMModel` 元数据字段 `context_length` / `capabilities`（tools/reasoning/vision）
+  / `thinking_default`（None=跟随提供方）。`thinking` 未显式指定时按模型
+  `thinking_default` 解析，全路径默认关闭思考（`deepseek-v4-flash-free` 已配
+  `false`）。管理命令 `aris llm list` / `aris llm check`。**/models 同步
+  （阶段二）**：`aris llm fetch` 一体式（拉取→对比→models.dev enrichment→白名单
+  勾选 UI→写回备份）；「本地有云无」模型进退休机制
+  `config/retired_models.toml`（机器维护，宽限期 30 天自动删，`aris llm retired`
+  手动删，回归自动恢复）。详 `developDoc/LLM-PROVIDER-MGMT.md`
 
 ## 待定（勿替用户做决定）
 
@@ -283,6 +293,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | 技能系统（`behavior.skills`） | `developDoc/SKILLS.md` |
 | 联网搜索方案（演进历史 / 留档） | `developDoc/WEB-SEARCH.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
+| LLM 提供商/模型管理（list/check/fetch/退休） | `developDoc/LLM-PROVIDER-MGMT.md` |
 | `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |
 | 项目蓝图 | `developDoc/Project-Aris.md` |
 | 记忆架构总体（候选参考） | `referenceDocumentation/记忆数据库-bydsv4fpre.html`、`MemoryTips-bygemini.md` |

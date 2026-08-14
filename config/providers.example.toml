@@ -4,6 +4,9 @@
 # 默认尝试顺序：写在此列表里的提供方优先，未写到的按文件出现顺序补齐
 default_provider_order = ["deepseek"]
 
+# 默认模型（CLI 未指定 --model 时使用；缺失时自动兜底取第一个可用模型）
+default_model = "deepseek-v4-flash"
+
 # 每个提供方一个 [[providers.provider]] 条目
 [[providers.provider]]
 id = "deepseek"
@@ -19,3 +22,6 @@ transport = "sdk"                   # sdk（openai SDK）/ httpx（手写请求�
   name = "DeepSeek V4 Flash"        # 显示名
   request_name = "deepseek-v4-flash" # 实际请求时用的模型名
   formats = ["chat"]                # 支持的格式（当前仅 chat）
+  context_length = 1000000          # 可选：上下文窗口（tokens），供展示/选型
+  capabilities = ["tools", "reasoning"]  # 可选：能力关键词（tools/reasoning/vision）
+  thinking_default = false          # 可选：默认关闭思考模式（None=跟随提供方）
