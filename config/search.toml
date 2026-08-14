@@ -1,4 +1,9 @@
-# 联网搜索模块配置（Tavily API）
+# 联网搜索模块配置（Bing 直连为主 + Tavily 兜底）
+
+# 首选搜索引擎（"bing"/"tavily"/"auto"），另一个失败时自动兜底
+# 定案：一律走 Bing 国际版（www.bing.com），Tavily 兜底
+# auto = 按查询语言分流（含中文走 Tavily），仅在需要时切换
+prefer_engine = "bing"
 
 # HTTP 请求超时（秒）
 timeout_seconds = 15.0

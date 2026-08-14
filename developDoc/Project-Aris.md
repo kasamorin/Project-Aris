@@ -25,7 +25,7 @@
       * 自建 MCP 服务器（可能很多个）
     * Skills
     * 联网搜索
-      * Tavily API 唯一主链路（2026-08-12 定案，见 WEB-SEARCH.md）
-      * 国内源深抓、按 id 点开读正文（web_open）后续再加
+      * Bing 直连主链路 + Tavily 兜底（2026-08-14 定案，见 WEB-SEARCH.md）
+      * web_open 按 id 点开读正文已实现；国内源深抓后续再加
   * 插件系统
     * 后续可能增加（MCP 服务器可做同样的事）

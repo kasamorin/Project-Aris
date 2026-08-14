@@ -219,11 +219,19 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   方便以后加 GraphRAG（Apache AGE vs 递归 CTE 到时再定）
 - **记忆实现方式**：走 RAG，但**不用现有框架**（LangChain/LlamaIndex 等），
   自研轻量实现；重量依赖安装方式（独立环境 / pyproject extras）实现时再定
-- **联网搜索（2026-08-09 定案；2026-08-12 精简）**：**Tavily API 唯一主链路**
-  （专为 LLM 设计、无反爬，`TAVILY_API_KEY` 走 `.env`）。曾尝试 Playwright
-  驱动浏览器降级方案（原定驱动系统 Firefox，实测官方不支持品牌版，改用自带
-  Firefox 二进制；headless 下 Bing/Google 均触发验证码反爬）——该链路已
-  **代码删除**，历史与恢复要点留档在 `developDoc/WEB-SEARCH.md`，勿再实现。
+- **联网搜索（2026-08-09 定案；2026-08-12 精简；2026-08-14 改 Bing 主链路）**：
+  **Bing 直连为主（www.bing.com，零成本无 key）+ Tavily API 兜底**
+  （`TAVILY_API_KEY` 走 `.env`）。曾尝试 Playwright 驱动浏览器降级方案
+  （原定驱动系统 Firefox，实测官方不支持品牌版，改用自带 Firefox 二进制；
+  headless 下 Bing/Google 均触发验证码反爬）——该链路已**代码删除**，
+  历史与恢复要点留档在 `developDoc/WEB-SEARCH.md`，勿再实现。
+  引擎顺序：`config/search.toml` 的 `prefer_engine`（默认 `"bing"`；可切
+  `"tavily"` 或 `"auto"` 按查询语言分流——中文走 Tavily）。Bing 关键实现
+  细节（2026-08-14 实测，缺一不可）：Firefox UA（Chrome UA 需 sec-ch-ua
+  配套指纹）+ 先访问首页拿 cookie（MUID 会话）+ 搜索 URL 带 `form=QBRE`
+  参数；链接解码 `/ck/a` 重定向的 `u=` base64 参数拿真实 URL。不满足时
+  Bing 偶发返回官网首页等低质量结果。Bing 失败（限流/断连/无结果）自动
+  降级 Tavily。
   工具返回：外层 JSON（`{"type": "web_search_results", "engine", "results"}`）
   标识是联网搜索结果 + 内部 markdown（省 token），每条带自增 id。
   **`web_open(id)` 已实现（2026-08-12）**：按 id 抓取网页正文（httpx +

@@ -112,6 +112,25 @@
   - 验证：真实模型「记个备忘 → 查看」自主激活 skill 完整链路跑通，未激活
     时 registry 只含 `activate_skill` + 内置工具（不污染）
   - 详 `developDoc/SKILLS.md`
+- **联网搜索改 Bing 主链路（2026-08-14）**：`web_search` 由 Tavily 唯一主链路
+  改为 **Bing 直连为主 + Tavily 兜底**（多引擎编排）。
+  - 背景：Tavily 免费额度有限，且摘要带页面导航噪音（`博客园logo/搜索/订阅数`
+    实测混入）；Bing 免费无 key、中文结果好。
+  - Bing 实现要点（2026-08-14 实测，缺一不可）：Firefox UA（Chrome UA 需
+    sec-ch-ua 配套指纹）+ 先访问首页拿 cookie（MUID 会话）+ 搜索 URL 带
+    `form=QBRE` + 查询词 URL 编码；`/ck/a` 重定向链接解码 `u=` base64 参数
+    拿真实 URL；BeautifulSoup 解析 `li.b_algo`（新增依赖 beautifulsoup4）。
+    不满足时 Bing 偶发返回官网首页等低质量结果（曾实测 `python 3.14 新特性`
+    → `Welcome to Python.org`）。
+  - 引擎策略：`config/search.toml` 的 `prefer_engine`（默认 `"bing"`，可切
+    `"tavily"` / `"auto"` 按查询语言分流），Bing 失败自动降级 Tavily，成功
+    引擎如实写入 `engine` 字段。
+  - Tavily 摘要清洗：`_clean_snippet` 取最长文本块过滤导航噪音。
+  - 验证：真实请求 6/6 稳定返回高质量结果（知乎/python 文档）；`web_open`
+    抓取 python 官方文档正文成功、知乎等反爬站宽容降级；engine 降级链路完好。
+    LLM 端到端未测（opencode 免费模型 429 限流，与本次改动无关）。
+  - 排查过程留档 `developDoc/WEB-SEARCH.md`（curl 直连可行性、中文质量崩坏
+    定位到 daed 代理出口、cookie/QBRE 关键参数确认）。
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
