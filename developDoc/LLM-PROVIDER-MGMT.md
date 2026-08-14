@@ -197,7 +197,7 @@ first_missing = "2026-08-14"   # 首次失联日期，宽限期起算
 | `config/providers.toml` / `providers.example.toml` | `default_model` + 模型元数据 |
 | `config/retired_models.toml` | 退休记录（阶段二，机器维护，新） |
 
-依赖：httpx / prompt_toolkit / tomllib（均已有，无新增）。
+依赖：httpx / prompt_toolkit / tomllib / tomli-w（tomli-w 新增，写回用）。
 
 ## 验证清单
 
