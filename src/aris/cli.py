@@ -644,7 +644,16 @@ def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
     # doctor 是环境自检命令，始终显示 INFO 级别以便查看检查结果
     console_level = "INFO" if (args.verbose or args.command == "doctor") else None
-    setup_logging(settings.log_level, settings.data_dir, console_level=console_level)
+    # chat 命令默认不向控制台输出日志——全屏 TUI 由 prompt_toolkit 接管终端，
+    # loguru 直接写 stderr 会破坏渲染（spinner 残留、界面错位）；日志仍写文件。
+    # --verbose 可强制开启，用于联调排查。
+    console = not (args.command == "chat" and not args.verbose)
+    setup_logging(
+        settings.log_level,
+        settings.data_dir,
+        console=console,
+        console_level=console_level,
+    )
 
     if args.command is None:
         parser.print_help()
