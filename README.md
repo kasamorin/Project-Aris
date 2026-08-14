@@ -26,14 +26,16 @@ aris chat
 
 | 命令 | 说明 |
 |---|---|
-| `aris doctor` | 环境自检（Python 版本、C 扩展、.env、数据目录） |
+| `aris doctor` | 环境自检（Python 版本、C 扩展、.env、数据目录、LLM 配置摘要） |
+| `aris llm list` | 列出提供方与模型（密钥状态/能力/上下文），默认模型标 `[默认]` |
+| `aris llm check` | LLM 配置体检（重复 id / 缺 key / 默认模型），有问题非零退出 |
 | `aris llm test` | 手动验证 LLM 连接（流式对话，调试 fallback） |
 | `aris chat [消息]` | 文字对话：带消息走单次问答，不带进入交互循环 |
 
 `aris chat` 常用选项：
 
 - `--system <文本>`：自定义系统提示词（默认使用内置 Aris 人设）
-- `--model <id>`：切换模型（默认 `deepseek-v4-flash-free`）
+- `--model <id>`：切换模型（默认取 `providers.toml` 的 `default_model`）
 - `--thinking`：开启思考模式（默认关闭，首字响应更快）
 - `--no-tools`：禁用工具调用（默认开启内置工具：联网搜索等）
 
@@ -98,5 +100,6 @@ referenceDocumentation/  # 候选参考文档
 | `developDoc/BUS-ARCHITECTURE.md` | 统一通讯层 |
 | `developDoc/WEB-SEARCH.md` | 联网搜索方案 |
 | `developDoc/EMBEDDING.md` | 记忆 / Embedding 方案 |
+| `developDoc/LLM-PROVIDER-MGMT.md` | LLM 提供商与模型管理（list/check/fetch/退休机制） |
 | `developDoc/stt&&tts选型.md` | 语音选型 |
 | `referenceDocumentation/` | 候选参考文档 |

@@ -137,6 +137,18 @@
   提交信息 commit-msg hook 校验（`.githooks/` + `scripts/install-git-hooks.sh`）、
   里程碑合并 bump minor + 打 `vX.Y.Z` tag。`oldWish` 分支（main 祖先）明确保留勿删。
   v0.2.0 作为首个里程碑 tag。
+- **LLM 提供商与模型管理（阶段一，2026-08-14）**：`feat/provider-model-mgmt` 分支落地
+  管理基础（详 `developDoc/LLM-PROVIDER-MGMT.md`）。
+  - 提供方 schema 扩展：`default_model`（顶层）+ `LLMModel` 新增
+    `context_length` / `capabilities` / `thinking_default`；加载校验重复
+    provider/模型 id；default_model 缺失/无效自动兜底第一个可用模型
+  - thinking 默认值按模型配置解析：`deepseek-v4-flash-free` 配
+    `thinking_default = false`，`aris llm test` 等所有路径默认发
+    `{"type":"disabled"}` 消除首字延迟（真机 429 限流未测出延迟改善，属环境问题）
+  - `aris llm list`（提供方/模型/密钥状态/元数据，标 `[默认]`）与
+    `aris llm check`（配置体检非零退出）命令；doctor 末尾附体检摘要
+  - 默认模型配置化：`llm test` / `chat` 的 `--model` 默认值取 `default_model`
+  - 顺带修复：uv.lock 与 `__version__` 同步至 0.2.0（此前 bump 遗漏）
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
@@ -188,14 +200,15 @@
 
 ## 下一步
 
-1. 行为扩展续（**进行中**，2026-08-12）：Skills 机制已落地（note demo 验证）；
-   下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
-   以 note 为模板做
-2. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
-3. 语音链路（STT → LLM → TTS）
+1. LLM 提供商与模型管理（**阶段二，进行中**）：`aris llm fetch` 一体式
+   （/models 拉取 + models.dev enrichment + 白名单勾选 UI + 写回）+ 退休机制
+   （`config/retired_models.toml` 宽限期 30 天 + `aris llm retired` 删除 TUI），
+   详 `developDoc/LLM-PROVIDER-MGMT.md`
+2. 行为扩展续：下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
+3. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
+4. 语音链路（STT → LLM → TTS）
 
 ## 专项优化（暂缓）
 
-- **/models 动态获取模型名**：`GET {base_url}/models` 返回 `data[].id`，
-  opencode 用静态目录（Models.dev）不从该接口动态拉；Aris 后续可加
-  `fetch_models()` 免手填 providers.toml 模型名（`aris llm test --list-models`）
+- ~~**/models 动态获取模型名**~~（已并入阶段二 `aris llm fetch`，2026-08-14
+  定案，见 `developDoc/LLM-PROVIDER-MGMT.md`）
