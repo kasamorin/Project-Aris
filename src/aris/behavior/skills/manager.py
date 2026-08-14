@@ -25,8 +25,10 @@ from .frontmatter import SkillMeta, read_skill_meta
 
 # skills 目录（相对本文件，包内），每个子目录是一个 skill
 SKILLS_DIR = Path(__file__).resolve().parent
-# 激活返回的 SKILL.md 正文最大长度（字符，超过提示截断，遵循『正文要短』约定）
-_DESC_MAX = 200
+# 菜单中单条 description 的最大长度（字符，超过截断）。Anthropic 官方 skill
+# 的 description 可达 400+ 字符（含触发关键词），截断过短会让模型漏判激活时机，
+# 故放宽到 500（note 等中文描述则远短于此）。
+_DESC_MAX = 500
 
 
 @dataclass

@@ -89,9 +89,33 @@ skills/<name>/
 - 用途：验证「菜单注入 → 激活 → 工具可用 → 持久化落盘」全链路。
   开发者接手 AstrBook skill 时以此作模板。
 
+## 外部 skill 兼容性（2026-08-14 实测 anthropics/skills）
+
+下载 Anthropic 官方 skill 仓库（`github.com/anthropics/skills`）实测验证，两个
+纯指令型 skill 已装入：`frontend-design`（UI 设计指南）、`doc-coauthoring`
+（文档协作工作流），均为 Apache 2.0，LICENSE 随目录保留。结论：
+
+- **frontmatter 完全兼容**：Anthropic 的 `name`/`description` 格式与我们的解析器
+  一致；额外的 `license` 等字段被宽容忽略，不报错。
+- **纯指令型 skill 开箱即用**：只含 SKILL.md（无 scripts/）的 skill，激活后模型
+  直接按手册干活，无需工具装载。两类官方 skill 已装入。
+- **脚本型 skill 当前不兼容**：docx/pdf/pptx 等依赖 `scripts/` 里的 bash 命令，
+  而 Aris 模型没有通用 bash 工具（工具是注册式），暂不可用。
+- **references/ 依赖不可用**：`internal-comms` 等 skill 的激活手册指向
+  `examples/` 子文件，而 L3 references 读取工具尚未实现（见「演进方向」），
+  激活后模型读不到子文件，故未装入。
+- **description 截断阈值**：菜单单条 description 截断从 200 放宽到 500 字符
+  （`manager.py _DESC_MAX`）。Anthropic 的 description 可达 400+ 字符且含触发
+  关键词（如 doc-coauthoring 列举 PRD/RFC/design doc），截断过短会让模型漏判
+  激活时机。
+- 引入外部 skill 时注意：SKILL.md 正文仍建议 ≤500 行/5000 token（超长时
+  按需拆 references/，L3 工具待实现）；保留原 LICENSE 及版权声明。
+
 ## 验证方法
 
-- 单元：`SkillManager` 扫描/菜单/激活/幂等/不存在处理（本会话已跑通）。
+- 单元：`SkillManager` 扫描/菜单/激活/幂等/不存在处理（已跑通，含外部 skill）。
+- agent loop 模拟：mock LLM 返回一轮 `activate_skill` 工具调用 + 一轮最终回答，
+  验证「激活 → 手册回填 TOOL 消息 → 第二轮基于手册回答」闭环（已跑通）。
 - 真实链路：`uv run aris chat` 说「帮我记个备忘：明早9点开产品周会」，
   模型应自主调 `activate_skill("note")` → `note_save`；再问「我之前的备忘是什么」
   应调 `note_read`/`note_list` 并正确回答；数据落盘 `data/notes/`。
