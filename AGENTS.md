@@ -71,14 +71,19 @@
   - 改动极小（body 无内容可写）时可省略 body，但 head 必须符合格式
   - **仓库自带 commit-msg hook**（`.githooks/`）校验 head 格式，安装方式见
     `scripts/install-git-hooks.sh`；hook 放行 merge/revert 提交
-- **分支策略**：**main 永远稳定可跑**（只进合并，不直接开发提交）。
-  开发一律开 feature 分支：从最新 main 拉取，命名 `feat/<短名>`（bug 用
-  `fix/`、文档用 `docs/`、重构用 `refactor/`），分支内保持小粒度提交
-  （一件事一个提交）。完成验证后**本地 `git merge --no-ff` 合并回 main**
-  （保留分支内提交历史），合并提交用对应前缀一句话总结，随后删除本地 +
-  远程分支。
-- **版本与 tag**：`pyproject.toml` 为唯一版本源。**里程碑合并时** bump minor
-  + 打 `vX.Y.Z` tag 并推送（`git push --tags`）；日常 fix/docs 不 bump。
+- **分支策略（2026-08-14 优化，git flow 简化版）**：
+  - **`develop` 为日常开发汇聚分支**：所有开发先在 feature 分支
+    （`feat/`、`fix/`、`docs/`、`refactor/` 前缀，从最新 develop 拉取），
+    分支内小粒度提交，验证后 `git merge --no-ff` 合并回 develop，
+    随后删除本地 + 远程 feature 分支。**daily 开发一律不直接碰 main**。
+  - **`main` 永远稳定可跑，只进版本发布**：仅在**版本号更新**（bump
+    版本 + 打 tag）时才从 develop 合并回 main（`git merge --no-ff`），
+    合并提交用对应前缀一句话总结。日常 fix/docs 不进 main。
+  - 小版本（feature 级）bump patch（如 0.2.1 → 0.2.2），大功能/破坏性
+    变更 bump minor；**避免为了「有进展」频繁 bump**，攒到阶段性发布再 bump。
+- **版本与 tag**：`pyproject.toml` 为唯一版本源，`src/aris/__init__.py`
+  同步 `__version__`。版本发布时：develop 上 bump 版本 → 合并回 main →
+  打 `vX.Y.Z` tag → `git push --tags`。
 - **保留分支**：`oldWish` 为历史保留分支（main 祖先：首次提交/README/许可证），
   **不要删除**，也不建议在此分支上继续开发。
 
