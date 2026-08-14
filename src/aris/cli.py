@@ -175,8 +175,9 @@ def _cmd_llm_test(args: argparse.Namespace) -> int:
         error_message=settings.llm_error_message,
     )
 
+    model_id = args.model or providers.resolve_default_model()
     request = plain_chat(
-        model_id=args.model,
+        model_id=model_id,
         text=args.message,
         system=args.system,
     )
@@ -201,7 +202,7 @@ def _cmd_chat(args: argparse.Namespace) -> int:
     )
     session = ChatSession(
         engine,
-        model_id=args.model,
+        model_id=args.model or providers.resolve_default_model(),
         system_prompt=args.system,  # None 时使用 persona 人设（提示词工程）
         data_dir=settings.data_dir,
         thinking=args.thinking,
@@ -244,7 +245,9 @@ def main(argv: list[str] | None = None) -> int:
     p_check.set_defaults(func=_cmd_llm_check)
     p_test = p_llm_test.add_parser("test", help="手动验证 LLM 连接（流式）")
     p_test.add_argument(
-        "--model", default="deepseek-v4-flash-free", help="统一模型 id（默认 deepseek-v4-flash-free）"
+        "--model",
+        default=None,
+        help="统一模型 id（默认取 config/providers.toml 的 default_model）",
     )
     p_test.add_argument(
         "--message", default="用一句话介绍你自己。", help="要发送的用户消息"
@@ -260,8 +263,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_chat.add_argument(
         "--model",
-        default="deepseek-v4-flash-free",
-        help="统一模型 id（默认 deepseek-v4-flash-free）",
+        default=None,
+        help="统一模型 id（默认取 config/providers.toml 的 default_model）",
     )
     p_chat.add_argument(
         "--system",
