@@ -200,10 +200,11 @@
 
 ## 下一步
 
-1. LLM 提供商与模型管理（**阶段二，进行中**）：`aris llm fetch` 一体式
-   （/models 拉取 + models.dev enrichment + 白名单勾选 UI + 写回）+ 退休机制
-   （`config/retired_models.toml` 宽限期 30 天 + `aris llm retired` 删除 TUI），
-   详 `developDoc/LLM-PROVIDER-MGMT.md`
+1. LLM 提供商与模型管理（**阶段二，已完成** 2026-08-14）：`aris llm fetch`
+   一体式（/models 拉取 + models.dev enrichment + 白名单勾选 UI + 写回）+
+   退休机制（`config/retired_models.toml` 宽限期 30 天 + `aris llm retired`
+   删除 TUI）已实现并验证，详 `developDoc/LLM-PROVIDER-MGMT.md`。
+   后续：真机验证勾选 UI；把真实端点 62 个模型同步进配置并挑选默认模型
 2. 行为扩展续：下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
 3. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
 4. 语音链路（STT → LLM → TTS）
