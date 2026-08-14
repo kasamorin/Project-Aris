@@ -8,6 +8,7 @@
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -46,9 +47,119 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     settings = get_settings()
     logger.info(f"数据目录: {settings.data_dir}")
 
+    # LLM 配置体检摘要（不影响 doctor 整体退出码，详情见 aris llm check）
+    try:
+        from aris.core.llm import load_providers
+        from aris.core.llm.config import ProviderConfigError
+
+        providers = load_providers(settings.llm_providers_file)
+    except ProviderConfigError as e:
+        logger.error(f"LLM 配置: {e}")
+    else:
+        issues = _collect_check_issues(providers)
+        if issues:
+            err_count = sum(1 for level, _ in issues if level == "error")
+            logger.warning(
+                f"LLM 配置: {len(issues)} 个问题（{err_count} 个错误），运行 aris llm check 查看详情"
+            )
+        else:
+            logger.success("LLM 配置: 通过")
+
     if ok:
         logger.success("环境自检通过")
     return 0 if ok else 1
+
+
+def _provider_key_status(provider) -> str:
+    """提供方密钥状态文本：[就位] / [缺 key]。"""
+    if os.environ.get(provider.api_key_env):
+        return f"{provider.api_key_env} [就位]"
+    return f"{provider.api_key_env} [缺 key]"
+
+
+def _format_context(n: int | None) -> str:
+    """把 tokens 数格式化为可读文本（200K / 1M / -）。"""
+    if not n:
+        return "-"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.0f}M"
+    if n >= 1000:
+        return f"{n // 1000}K"
+    return str(n)
+
+
+def _cmd_llm_list(args: argparse.Namespace) -> int:
+    """列出全部提供方 + 模型 + 密钥状态 + 元数据，默认模型标 [默认]。"""
+    from aris.core.llm import load_providers
+    from aris.core.llm.config import ProviderConfigError
+
+    settings = get_settings()
+    try:
+        providers = load_providers(settings.llm_providers_file)
+    except ProviderConfigError as e:
+        logger.error(str(e))
+        return 1
+    default_model = providers.resolve_default_model()
+
+    for provider in providers.ordered_providers():
+        print(f"提供方: {provider.id} ({provider.name})")
+        print(f"  地址: {provider.base_url}")
+        print(f"  传输: {provider.transport} | 密钥: {_provider_key_status(provider)}")
+        if not provider.models:
+            print("  模型: （空）")
+            continue
+        print("  模型:")
+        for m in provider.models:
+            marker = "  [默认]" if m.id == default_model else ""
+            caps = ", ".join(m.capabilities) if m.capabilities else "-"
+            name_col = f"{m.id}{marker}".ljust(34)
+            print(
+                f"    - {name_col}  capabilities: {caps:<20}  context: {_format_context(m.context_length)}"
+            )
+    print(f"\n默认模型: {default_model}")
+    return 0
+
+
+def _collect_check_issues(providers) -> list[tuple[str, str]]:
+    """收集配置体检问题：[(level, message)]，level ∈ error / warning。"""
+    issues: list[tuple[str, str]] = []
+    known = {p.id for p in providers.providers}
+    for pid in providers.order:
+        if pid not in known:
+            issues.append(("error", f"default_provider_order 引用不存在的提供方: {pid}"))
+    for p in providers.providers:
+        if not p.models:
+            issues.append(("error", f"提供方 {p.id} 模型列表为空"))
+        if not os.environ.get(p.api_key_env):
+            issues.append(("error", f"提供方 {p.id} 缺 API key：请在 .env 设置 {p.api_key_env}"))
+    if not providers.default_model:
+        issues.append(("warning", "default_model 未配置，CLI 将自动兜底取第一个可用模型"))
+    elif providers.default_model not in providers.all_model_ids():
+        issues.append(
+            ("warning", f"default_model {providers.default_model} 不存在于任何提供方，将自动兜底")
+        )
+    return issues
+
+
+def _cmd_llm_check(args: argparse.Namespace) -> int:
+    """配置体检：重复 id / order 引用 / 缺 key / 默认模型，有问题非零退出。"""
+    from aris.core.llm import load_providers
+    from aris.core.llm.config import ProviderConfigError
+
+    settings = get_settings()
+    try:
+        providers = load_providers(settings.llm_providers_file)
+    except ProviderConfigError as e:
+        logger.error(str(e))
+        return 1
+    issues = _collect_check_issues(providers)
+    if not issues:
+        logger.success("LLM 配置体检通过")
+        return 0
+    for level, message in issues:
+        (logger.error if level == "error" else logger.warning)(f"[{level}] {message}")
+    err_count = sum(1 for level, _ in issues if level == "error")
+    return 1 if err_count else 0
 
 
 def _cmd_llm_test(args: argparse.Namespace) -> int:
@@ -123,8 +234,14 @@ def main(argv: list[str] | None = None) -> int:
     p_doctor = sub.add_parser("doctor", help="环境自检")
     p_doctor.set_defaults(func=_cmd_doctor)
 
-    p_llm = sub.add_parser("llm", help="LLM 连接调试")
+    p_llm = sub.add_parser("llm", help="LLM 提供方与模型管理")
     p_llm_test = p_llm.add_subparsers(dest="llm_command")
+    p_list = p_llm_test.add_parser("list", help="列出提供方与模型（含密钥状态/元数据）")
+    p_list.set_defaults(func=_cmd_llm_list)
+    p_check = p_llm_test.add_parser(
+        "check", help="配置体检（重复 id / 缺 key / 默认模型），有问题非零退出"
+    )
+    p_check.set_defaults(func=_cmd_llm_check)
     p_test = p_llm_test.add_parser("test", help="手动验证 LLM 连接（流式）")
     p_test.add_argument(
         "--model", default="deepseek-v4-flash-free", help="统一模型 id（默认 deepseek-v4-flash-free）"
