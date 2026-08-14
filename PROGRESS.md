@@ -131,6 +131,12 @@
     LLM 端到端未测（opencode 免费模型 429 限流，与本次改动无关）。
   - 排查过程留档 `developDoc/WEB-SEARCH.md`（curl 直连可行性、中文质量崩坏
     定位到 daed 代理出口、cookie/QBRE 关键参数确认）。
+- **开发流程标准化定案（2026-08-14）**：此前一直在 main 直接开发提交，现落地
+  AGENTS.md「Git 开发流程」：main 永远稳定可跑（只进合并）、feature 分支开发
+  （`feat/`、`fix/`、`docs/`、`refactor/`）+ 本地 `merge --no-ff` 合并后删分支、
+  提交信息 commit-msg hook 校验（`.githooks/` + `scripts/install-git-hooks.sh`）、
+  里程碑合并 bump minor + 打 `vX.Y.Z` tag。`oldWish` 分支（main 祖先）明确保留勿删。
+  v0.2.0 作为首个里程碑 tag。
 - 骨架 v0.1.0：pyproject.toml（uv + src 布局）、.env.example、README.md、.gitignore
 - 配置系统定案：pydantic-settings（Arch 上 `uv sync` 跑通）
 - 文档：AGENTS.md、开发文档拆分、参考文档同步
