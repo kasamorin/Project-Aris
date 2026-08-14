@@ -12,6 +12,7 @@ dependencies = [
     "prompt-toolkit>=3.0.53",
     "trafilatura>=2.0",
     "beautifulsoup4>=4.12",
+    "tomli-w>=1.2.0",
 ]
 
 [project.scripts]
