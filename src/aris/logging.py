@@ -40,14 +40,18 @@ _logging_config = load_config(LoggingConfig(), "logging.toml")
 def setup_logging(
     level: str = "INFO",
     data_dir: Path | None = None,
+    *,
+    console: bool = True,
     console_level: str | None = None,
 ) -> None:
-    """配置全局日志：控制台 + 按天/大小轮转的文件日志。
+    """配置全局日志：控制台（可选）+ 按天/大小轮转的文件日志。
 
     参数:
         level: 文件日志级别（DEBUG / INFO / WARNING / ERROR），大小写不敏感。
         data_dir: 数据根目录，日志文件写入 `<data_dir>/logs/YYYY-MM-DD/`；
             为 None 时取全局配置 settings.data_dir。
+        console: 是否向控制台（stderr）输出日志。全屏 TUI 等「外部直接写终端
+            会破坏渲染」的场景应传 False；日志仍写入文件，不会丢失。
         console_level: 控制台日志级别；为 None 时默认显示 WARNING 及以上。
     """
     if data_dir is None:
@@ -58,7 +62,8 @@ def setup_logging(
     console_level = (console_level or "WARNING").upper()
     logger.remove()
 
-    logger.add(sys.stderr, level=console_level, format=_CONSOLE_FORMAT)
+    if console:
+        logger.add(sys.stderr, level=console_level, format=_CONSOLE_FORMAT)
 
     # 按天建文件夹 + 按大小轮转：{time:YYYY-MM-DD} 在跨天时自动切新目录
     logger.add(
