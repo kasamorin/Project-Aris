@@ -73,6 +73,26 @@ def _is_shift_mouse(data: str) -> bool:
     return bool(button & 4)
 
 
+class StallNotice:
+    """首字占位通知：展示后换行，不并入最终回答。"""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def __str__(self) -> str:
+        return self.text
+
+
+class DegradedNotice:
+    """本回合实际生效模型发生降级（竞速输给备选 / 模型级降级）。"""
+
+    def __init__(self, model_id: str) -> None:
+        self.model_id = model_id
+
+    def __str__(self) -> str:
+        return self.model_id
+
+
 class ToolNotice:
     """工具执行通知（后台线程入队，UI 侧渲染）。"""
 
@@ -87,7 +107,7 @@ class ChatTUI:
     def __init__(self, session: ChatSession) -> None:
         self.session = session
         self._cancel_event = threading.Event()
-        self._delta_queue: queue.Queue[str | ToolNotice | None] = queue.Queue()
+        self._delta_queue: queue.Queue[str | ToolNotice | StallNotice | DegradedNotice | None] = queue.Queue()
         self._last_esc = 0.0
         self._generating = False
 
@@ -284,11 +304,19 @@ class ChatTUI:
             # on_tool 回调（本线程执行）：只入队，界面更新由 _consume 完成
             self._delta_queue.put(ToolNotice(name=name, result=result))
 
+        def _notice_stall(t: str) -> None:
+            self._delta_queue.put(StallNotice(t))
+
+        def _notice_degraded(m: str) -> None:
+            self._delta_queue.put(DegradedNotice(m))
+
         try:
             for delta in self.session.ask(
                 text,
                 should_stop=lambda: self._cancel_event.is_set(),
                 on_tool=_notice,
+                on_stall=_notice_stall,
+                on_degraded=_notice_degraded,
             ):
                 self._delta_queue.put(delta)
         finally:
@@ -304,6 +332,14 @@ class ChatTUI:
             if isinstance(item, ToolNotice):
                 # 工具调用：在状态行同行显示工具名（不新增行，spinner 继续转）
                 self._show_tool(item.name)
+            elif isinstance(item, StallNotice):
+                # 首字占位：清掉 spinner，占位文本独占一行；真实内容仍会从新行继续
+                self._clear_state_line()
+                self._append_output(f"\n{item.text}\n")
+            elif isinstance(item, DegradedNotice):
+                # 降级提示：告知本回合实际生效的模型
+                self._clear_state_line()
+                self._append_output(f"\n[已降级到模型: {item.model_id}]\n")
             else:
                 self._clear_state_line()  # 首个内容 delta：移除 spinner 与工具名
                 self._append_output(item)
