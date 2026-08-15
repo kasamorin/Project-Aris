@@ -30,20 +30,31 @@ from .errors import (
 from .formatters import to_openai_chat_body
 from .message import ChatRequest, ToolCall
 
+# openai SDK 内建退避重试次数：瞬时断连容忍（sdk 默认 2），与 httpx 手写路径对齐
+SDK_MAX_RETRIES = 2
+
 
 @dataclass
 class StreamDelta:
-    """一次流式增量（文本 / 思考链）。
+    """一次流式增量（文本 / 思考链 / 完成事件 / 首字占位）。
 
     完成事件（流结束时的最后一个 delta）：content/reasoning 为空，
     finish_reason 有值，tool_calls 携带拼好的完整调用列表。
     上层据此判断本轮是否调用了工具。
+    stall：首字占位增量（超过 stall 阈值仍无产出时 engine 发出），
+        content 携带预设提示语；UI 应显示后换行，不把它当作最终回答。
+    model_id / degraded / race_possible：仅完成事件携带，供上层
+        （agent loop / session）判断实际生效的模型与是否进入竞速恢复。
     """
 
     content: str = ""
     reasoning: str = ""
     finish_reason: str | None = None
     tool_calls: list["ToolCall"] | None = None
+    stall: bool = False
+    model_id: str | None = None
+    degraded: bool = False
+    race_possible: bool = False
 
 
 def stream_chat(provider: LLMProvider, request: ChatRequest, timeout: float) -> Iterator[StreamDelta]:
@@ -83,7 +94,14 @@ def _stream_openai_sdk(provider: LLMProvider, request: ChatRequest, timeout: flo
     if model is None:
         raise LLMError(f"提供方 {provider.id} 不支持模型 {request.model_id}", provider_id=provider.id)
 
-    client = OpenAI(api_key=_api_key(provider), base_url=provider.base_url, timeout=timeout)
+    # 结构化超时：connect 单独设短，总超时/读超时沿用 provider.timeout
+    http_timeout = httpx.Timeout(timeout, connect=provider.connect_timeout)
+    client = OpenAI(
+        api_key=_api_key(provider),
+        base_url=provider.base_url,
+        timeout=http_timeout,
+        max_retries=SDK_MAX_RETRIES,
+    )
     body = to_openai_chat_body(request, model.request_name)
     # openai SDK 不认 thinking 等非标准参数，需放进 extra_body（DeepSeek 系兼容）
     extra_body: dict = {}
@@ -153,7 +171,8 @@ def _stream_httpx(provider: LLMProvider, request: ChatRequest, timeout: float) -
     body = to_openai_chat_body(request, model.request_name)
 
     try:
-        with httpx.stream("POST", url, json=body, headers=headers, timeout=timeout) as resp:
+        http_timeout = httpx.Timeout(timeout, connect=provider.connect_timeout)
+        with httpx.stream("POST", url, json=body, headers=headers, timeout=http_timeout) as resp:
             if resp.status_code >= 400:
                 detail = resp.read().decode("utf-8", errors="replace")
                 raise classify_http_status(resp.status_code, provider.id, detail)
