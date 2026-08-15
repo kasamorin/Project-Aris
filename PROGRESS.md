@@ -1,6 +1,6 @@
 # 开发进度报告
 
-更新于：2026-08-12（Arch Linux 会话）
+更新于：2026-08-15（Arch Linux 会话）
 
 ## 已完成
 
@@ -137,6 +137,19 @@
   提交信息 commit-msg hook 校验（`.githooks/` + `scripts/install-git-hooks.sh`）、
   里程碑合并 bump minor + 打 `vX.Y.Z` tag。`oldWish` 分支（main 祖先）明确保留勿删。
   v0.2.0 作为首个里程碑 tag。
+- **fallback 竞速恢复上层接入（2026-08-15）**：`feat/llm-fallback-race` 分支落地，
+  已 `merge --no-ff` 合入 develop 并推送（`docs:` 分支流程亦同此验证 hook 规则）。
+  - loop：`iter_events` 新增 `race_model` 参数（传入降级后实际生效的模型时本轮
+    走 `llm.race` 竞速，本家 vs 备选）；STALL 占位增量独立产出为 STALL 事件，
+    不并入最终回答；DONE 携带 `model_id / degraded / race_possible` 元数据
+  - session：`ask()` 新增 `on_stall` / `on_degraded` 回调；维护 `_degraded_model`
+    降级恢复状态——降级且可竞速时记住实际生效模型，下一轮竞速回主模型，
+    主模型恢复后自动退出降级模式；手动 `/model` 切换也会清降级状态；
+    repl（非 TTY）打印占位与降级提示
+  - tui：新增 `StallNotice` / `DegradedNotice` 通知类，生成线程经回调入队，
+    `_consume` 消费展示（占位独占一行、降级提示单独一行）
+  - 验证：新增 `test_llm_upper.py` 26 项（loop 层 3 + session 层 4）+ 旧
+    `test_llm_fallback.py` 50 项全部通过，无回归
 - **LLM 提供商与模型管理（阶段一，2026-08-14）**：`feat/provider-model-mgmt` 分支落地
   管理基础（详 `developDoc/LLM-PROVIDER-MGMT.md`）。
   - 提供方 schema 扩展：`default_model`（顶层）+ `LLMModel` 新增
