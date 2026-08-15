@@ -166,7 +166,7 @@ class LLMEngine:
 
         start = time.monotonic()
         stall_deadline = start + self.first_token_stall
-        stall_state = {"emitted": False}
+        stall_state = {"emitted": False, "produced": False}
 
         # 阶段一：同模型横向（含本家重试退避、切下家）
         for provider in candidates:
@@ -193,7 +193,7 @@ class LLMEngine:
                 runner = _StreamRunner(provider, effective, attempt_timeout)
                 try:
                     for delta in self._consume_attempt(runner, stall_deadline, stall_state):
-                        if delta.content or delta.reasoning or delta.finish_reason:
+                        if (delta.content and not delta.stall) or delta.reasoning or delta.finish_reason:
                             emitted = True
                         if delta.finish_reason:
                             # 完成事件标记实际生效模型（未降级）
@@ -238,7 +238,7 @@ class LLMEngine:
                 runner = _StreamRunner(provider, effective, attempt_timeout)
                 try:
                     for delta in self._consume_attempt(runner, stall_deadline, stall_state):
-                        if delta.content or delta.reasoning or delta.finish_reason:
+                        if (delta.content and not delta.stall) or delta.reasoning or delta.finish_reason:
                             emitted = True
                         if delta.finish_reason:
                             delta = replace(
@@ -281,7 +281,7 @@ class LLMEngine:
 
         start = time.monotonic()
         stall_deadline = start + self.first_token_stall
-        stall_state = {"emitted": False}
+        stall_state = {"emitted": False, "produced": False}
 
         entries: list[tuple[str, object]] = []
         if home_cands:
@@ -311,7 +311,9 @@ class LLMEngine:
                 runner.cancel()
             return
 
-        # 双边并发竞速
+        # 双边并发竞速：全程缓存各家增量（含完成事件），以 ended 标记流结束，
+        # 胜者的缓存在决策阶段可能已含完成事件——输出时按下文「缓存 + 实时尾段」处理，
+        # 避免胜者的 END 已被决策消费后、输出阶段再等它而死锁。
         shared: queue.Queue = queue.Queue()
         runners: dict[str, _StreamRunner] = {}
         for tag, provider in entries:
@@ -323,20 +325,22 @@ class LLMEngine:
         buffered: dict[str, list] = {RACE_TAG_HOME: [], RACE_TAG_FALLBACK: []}
         ended: dict[str, bool] = {RACE_TAG_HOME: False, RACE_TAG_FALLBACK: False}
         try:
-            # ---- 决策：首个 content 出现，含「微小差距优先本家」 ----
+            # ---- 决策：首个 content 定胜者；备选先出进入 grace，微小差距内本家跟上仍本家胜 ----
             winner: str | None = None
             grace_until: float | None = None
+            saw_content = False  # 竞速阶段是否已见到任何内容的文本
             while True:
                 if grace_until is not None and time.monotonic() >= grace_until:
                     if winner is None:
-                        winner = RACE_TAG_FALLBACK  # 备选先到且本家未跟上
+                        winner = RACE_TAG_FALLBACK  # 备选先出首字且本家未在 grace 内跟上
                     break
                 wait = self._race_stall_wait(stall_state, stall_deadline)
                 if wait is not None:
                     try:
                         tag, item = shared.get(timeout=wait)
                     except queue.Empty:
-                        if not stall_state["emitted"]:
+                        # 竞速阶段已见任何内容就不再发占位（占位只为「整体无产出」）
+                        if not stall_state["emitted"] and not saw_content:
                             stall_state["emitted"] = True
                             yield StreamDelta(stall=True, content=self.error_message)
                         continue
@@ -345,32 +349,33 @@ class LLMEngine:
 
                 if item is _STREAM_END or isinstance(item, Exception):
                     ended[tag] = True
-                    if tag == RACE_TAG_HOME:
-                        # 本家失败/结束：如正处 grace 窗口，直接判备选胜
-                        if grace_until is not None and winner is None:
-                            winner = RACE_TAG_FALLBACK
-                            break
-                        if ended[RACE_TAG_HOME] and ended[RACE_TAG_FALLBACK]:
-                            break  # 双方都退出，交由下方整体失败
-                    if winner is None and ended[RACE_TAG_HOME] and ended[RACE_TAG_FALLBACK]:
+                    # 本家失败/结束、且备选已出过首字（处于 grace）→ 直接判备选胜
+                    if tag == RACE_TAG_HOME and winner is None and grace_until is not None:
+                        winner = RACE_TAG_FALLBACK
                         break
+                    if ended[RACE_TAG_HOME] and ended[RACE_TAG_FALLBACK]:
+                        break  # 双方结束，交由下方判定
                     continue
-                buffered[tag].append(item)
 
-                if item.content and tag == RACE_TAG_HOME and winner is None and grace_until is None:
-                    winner = RACE_TAG_HOME  # 本家直接先出
-                    break
-                if item.content and tag == RACE_TAG_FALLBACK and winner is None and grace_until is None:
-                    # 备选先出：观察一段时间，本家追上则仍判本家胜
-                    grace_until = time.monotonic() + RACE_GRACE
-                if (
-                    grace_until is not None
-                    and winner is None
-                    and item.content
-                    and tag == RACE_TAG_HOME
-                ):
-                    winner = RACE_TAG_HOME  # 微小差距内本家跟上 → 本家胜
-                    break
+                buffered[tag].append(item)
+                if item.content:
+                    saw_content = True
+                if item.content and winner is None:
+                    if tag == RACE_TAG_HOME:
+                        winner = RACE_TAG_HOME
+                        break
+                    if grace_until is None:
+                        # 备选先出首字：开 grace 窗口观察，本家跟上仍判本家胜
+                        grace_until = time.monotonic() + RACE_GRACE
+
+            if winner is None:
+                # 双方先结束仍未定胜者：谁出过内容谁胜（无需竞速也无降级语义）；都没有才走错误处理
+                home_has = any(getattr(i, "content", "") for i in buffered[RACE_TAG_HOME])
+                fb_has = any(getattr(i, "content", "") for i in buffered[RACE_TAG_FALLBACK])
+                if fb_has and not home_has:
+                    winner = RACE_TAG_FALLBACK
+                elif home_has:
+                    winner = RACE_TAG_HOME
 
             if winner is None:
                 # 双方均无产出即结束：取第一个错误，否则按失败处理
@@ -393,24 +398,22 @@ class LLMEngine:
                     )
                 return
 
-            # ---- 输出胜者 buffered 增量 + 实时流，直到完成事件 ----
+            # ---- 输出胜者：先吐决策期缓存的增量（含完成事件），未结束再实时读尾段 ----
             is_home = winner == RACE_TAG_HOME
-            lose_tag = RACE_TAG_FALLBACK if is_home else RACE_TAG_HOME
             for item in buffered[winner]:
                 if isinstance(item, Exception):
                     raise item
                 yield self._decorate_race_delta(item, is_home, home_request, fallback_request)
-            while True:
-                tag, item = shared.get()
-                if tag != winner:
-                    continue
-                if item is _STREAM_END:
-                    break
-                if isinstance(item, Exception):
-                    raise item
-                yield self._decorate_race_delta(item, is_home, home_request, fallback_request)
-                if item.finish_reason:
-                    break
+            if not ended[winner]:
+                while True:
+                    tag, item = shared.get()
+                    if tag != winner:
+                        continue
+                    if item is _STREAM_END:
+                        break
+                    if isinstance(item, Exception):
+                        raise item
+                    yield self._decorate_race_delta(item, is_home, home_request, fallback_request)
         finally:
             for runner in runners.values():
                 runner.cancel()
@@ -473,12 +476,14 @@ class LLMEngine:
         stall_deadline: float,
         stall_state: dict,
     ) -> Iterator[StreamDelta]:
-        """串行消费一个后台流：到占位时点无产出先吐占位，其余增量透传。
+        """串行消费一个后台流：到占位时点仍无产出先吐占位，其余增量透传。
 
+        占位只为「首字过慢」而设：一旦本请求已产出过真实内容（stall_state 的
+        produced 标记），即使后续续流变慢也不再发第二遍。
         流正常结束返回；流错误以原类型上抛（供上层重试/切换判定）。
         """
         while True:
-            if not stall_state["emitted"]:
+            if not stall_state["emitted"] and not stall_state["produced"]:
                 wait = stall_deadline - time.monotonic()
                 if wait <= 0:
                     stall_state["emitted"] = True
@@ -494,6 +499,8 @@ class LLMEngine:
                 return
             if isinstance(item, Exception):
                 raise item
+            if (item.content and not item.stall) or item.reasoning or item.finish_reason:
+                stall_state["produced"] = True
             yield item
 
     def _handle_failure(
