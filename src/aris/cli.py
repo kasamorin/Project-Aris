@@ -172,6 +172,7 @@ def _cmd_llm_test(args: argparse.Namespace) -> int:
     engine = LLMEngine(
         providers,
         timeout=settings.llm_fallback_timeout,
+        first_token_stall=settings.llm_first_token_stall,
         error_message=settings.llm_error_message,
     )
 
@@ -526,6 +527,7 @@ def _cmd_chat(args: argparse.Namespace) -> int:
     engine = LLMEngine(
         providers,
         timeout=settings.llm_fallback_timeout,
+        first_token_stall=settings.llm_first_token_stall,
         error_message=settings.llm_error_message,
     )
     session = ChatSession(
