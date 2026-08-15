@@ -26,6 +26,14 @@ class TransportKind(StrEnum):
     HTTPX = "httpx"
 
 
+# ---- fallback / 超时默认值（真机实测可调的才写进 providers.toml）----
+DEFAULT_TIMEOUT = 30.0          # 单次请求总超时（秒）
+DEFAULT_CONNECT_TIMEOUT = 10.0  # 建连超时（秒），单独设避免慢连接拖垮总预算
+DEFAULT_RETRY_COUNT = 1         # 可重试错误在同一提供方的重试次数（超出切下家）
+DEFAULT_BACKOFF_BASE = 0.5      # 退避基数（秒），指数增长封顶 BACKOFF_MAX
+DEFAULT_RACE_FALLBACK = True    # 降级后是否启用「本家 vs 备选」并发竞速恢复
+
+
 @dataclass
 class LLMModel:
     """统一模型定义（跨提供方共享 id，用于 fallback 匹配）。
@@ -34,6 +42,8 @@ class LLMModel:
     capabilities：能力关键词列表，约定 tools / reasoning / vision。
     thinking_default：默认思考模式开关；None=跟随提供方默认，
         False=默认关闭（请求体加 thinking:{"type":"disabled"}）。
+    fallback_models：主模型失败后的降级目标（同一提供方内的模型 id 列表），
+        由 engine 在同模型全灭后按顺序尝试（模型级降级）。
     """
 
     id: str
@@ -43,18 +53,30 @@ class LLMModel:
     context_length: int | None = None
     capabilities: list[str] = field(default_factory=list)
     thinking_default: bool | None = None
+    fallback_models: list[str] = field(default_factory=list)
 
 
 @dataclass
 class LLMProvider:
-    """一个 LLM 提供方。"""
+    """一个 LLM 提供方。
+
+    timeout：单次请求总超时（秒），覆盖读/写阶段。
+    connect_timeout：建连（含 TLS）超时（秒），短一些让「连不上」快速失败。
+    retry_count：可重试错误（限流/5xx/网络/超时）在本家的重试次数。
+    backoff_base：退避基数（秒），指数退避上限见 engine.py 的 BACKOFF_MAX。
+    race_fallback：降级后是否参与竞速恢复（付费/限配额提供方可关闭避免双倍消耗）。
+    """
 
     id: str
     name: str
     base_url: str
     api_key_env: str
-    timeout: float = 30.0
+    timeout: float = DEFAULT_TIMEOUT
     transport: str = TransportKind.SDK  # sdk（openai SDK）/ httpx（手写请求）
+    connect_timeout: float = DEFAULT_CONNECT_TIMEOUT
+    retry_count: int = DEFAULT_RETRY_COUNT
+    backoff_base: float = DEFAULT_BACKOFF_BASE
+    race_fallback: bool = DEFAULT_RACE_FALLBACK
     models: list[LLMModel] = field(default_factory=list)
 
     def get_model(self, model_id: str) -> LLMModel | None:
@@ -137,9 +159,14 @@ def load_providers(path: str | Path) -> ProviderConfig:
         default_model = "deepseek-v4-flash"
         [[providers.provider]]
         id = "deepseek"
-        ...
+        timeout = 30
+        connect_timeout = 10
+        retry_count = 1
+        backoff_base = 0.5
+        race_fallback = true
         [[providers.provider.models]]
         id = "deepseek-v4-flash"
+        fallback_models = ["deepseek-v3"]
         context_length = 1000000
         capabilities = ["tools", "reasoning"]
         thinking_default = false
@@ -182,6 +209,7 @@ def load_providers(path: str | Path) -> ProviderConfig:
                         context_length=m.get("context_length"),
                         capabilities=list(m.get("capabilities", [])),
                         thinking_default=m.get("thinking_default"),
+                        fallback_models=list(m.get("fallback_models", [])),
                     )
                 )
 
@@ -191,8 +219,12 @@ def load_providers(path: str | Path) -> ProviderConfig:
                     name=entry.get("name", pid),
                     base_url=entry["base_url"],
                     api_key_env=entry.get("api_key_env", f"{pid.upper()}_API_KEY"),
-                    timeout=float(entry.get("timeout", 30.0)),
+                    timeout=float(entry.get("timeout", DEFAULT_TIMEOUT)),
                     transport=entry.get("transport", TransportKind.SDK),
+                    connect_timeout=float(entry.get("connect_timeout", DEFAULT_CONNECT_TIMEOUT)),
+                    retry_count=int(entry.get("retry_count", DEFAULT_RETRY_COUNT)),
+                    backoff_base=float(entry.get("backoff_base", DEFAULT_BACKOFF_BASE)),
+                    race_fallback=bool(entry.get("race_fallback", DEFAULT_RACE_FALLBACK)),
                     models=models,
                 )
             )
