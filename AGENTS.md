@@ -300,6 +300,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
 | LLM 提供商/模型管理（list/check/fetch/退休） | `developDoc/LLM-PROVIDER-MGMT.md` |
 | `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |
+| 插件系统（草案，含后续讨论） | `developDoc/PLUGIN.md` |
+| WebUI 管理后台（审计/技能/提供商/插件） | `developDoc/WEBUI.md` |
 | 项目蓝图 | `developDoc/Project-Aris.md` |
 | 记忆架构总体（候选参考） | `referenceDocumentation/记忆数据库-bydsv4fpre.html`、`MemoryTips-bygemini.md` |
 | 开发路线总体（候选参考） | `referenceDocumentation/总览-bydsv4fpre.html` |
