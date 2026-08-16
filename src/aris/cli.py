@@ -17,6 +17,7 @@ from loguru import logger
 from . import __version__
 from .config import get_settings
 from .logging import setup_logging
+from .core.llm.config import LLMModel
 
 
 def _cmd_doctor(args: argparse.Namespace) -> int:
