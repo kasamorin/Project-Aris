@@ -178,6 +178,21 @@
   - 验证：新增 `test_web_migrate.py` 19 项（mock http.request 服务验证
     路由/会话/UA/Tavily body）+ `test_http_request.py` 命名会话 cookie 连续
     3 项；旧 `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全通过
+- **llm fetch 真机验证（2026-08-16）**：Arch 本机跑通阶段二全流程。
+  - 发现并修复 bug：`aris llm fetch` 启动即 NameError——`cli.py` 模块级
+    `_run_candidate_picker` 注解引用 `LLMModel` 但无模块级导入，补顶部导入
+  - 勾选 UI 真机全流程：pty 驱动选择 → 确认 → 写回 `providers.toml`
+    （新增 claude-fable-5，models.dev enrichment 完整 ctx 1M + tools/
+    reasoning/vision；备份 providers.toml.bak）；退休 ling/longcat/
+    north-mini-code 三个端点已下线的模型入 `retired_models.toml`
+  - 退休机制全验证：幂等重复 fetch 无重复条目 / 回归恢复（claude-sonnet-5
+    自动恢复） / 30 天宽限期过期（fake 条目被永久删除），验证后清理模拟条目
+  - OpenCode Zen 免费档实测持续 429 限流（环境问题，fallback 与错误广播
+    链路正常）→ 新增本地 mock 提供方：`mock_llm_server.py` 可独立运行
+    （CLI 支持 errors/first-delay/chunk-delay/thinking 场景 + /models 端点），
+    配套 `config/providers.mock.toml`（ARIS_LLM_PROVIDERS_FILE 切换）；
+    llm test（httpx/sdk 双传输）、429 重试退避恢复、fetch dry-run、
+    chat 单次（session/persona）全部对 mock 验证通过
 - **LLM 提供商与模型管理（阶段一，2026-08-14）**：`feat/provider-model-mgmt` 分支落地
   管理基础（详 `developDoc/LLM-PROVIDER-MGMT.md`）。
   - 提供方 schema 扩展：`default_model`（顶层）+ `LLMModel` 新增
@@ -246,7 +261,9 @@
    一体式（/models 拉取 + models.dev enrichment + 白名单勾选 UI + 写回）+
    退休机制（`config/retired_models.toml` 宽限期 30 天 + `aris llm retired`
    删除 TUI）已实现并验证，详 `developDoc/LLM-PROVIDER-MGMT.md`。
-   后续：真机验证勾选 UI；把真实端点 62 个模型同步进配置并挑选默认模型
+   真机验证已完成（2026-08-16，见已完成条目）。后续：决定是否把真实端点
+   62 个模型全量同步进配置并挑选默认模型（当前默认仍 deepseek-v4-flash-free，
+   端点限流 429 时可用本地 mock 测试链路）
 2. 行为扩展续：下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
 3. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
 4. 语音链路（STT → LLM → TTS）

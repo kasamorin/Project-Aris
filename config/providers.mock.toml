@@ -1,0 +1,28 @@
+# 本地 mock LLM 提供方配置（真机验证用，无真实密钥）
+# 用法：
+#   1. uv run python mock_llm_server.py         # 起本地 mock 服务（默认 127.0.0.1:8765）
+#   2. ARIS_LLM_PROVIDERS_FILE=config/providers.mock.toml \
+#         uv run aris llm test --model mock-model
+#   3. ARIS_LLM_PROVIDERS_FILE=config/providers.mock.toml \
+#         uv run aris llm fetch                  # dry-run 对比 mock /models
+
+default_provider_order = ["mock"]
+
+default_model = "mock-model"
+
+[[providers.provider]]
+id = "mock"
+name = "Mock"
+base_url = "http://127.0.0.1:8765/prov/mock"   # 与 mock_llm_server.py --port 对齐
+api_key_env = "MOCK_API_KEY"
+timeout = 30
+transport = "httpx"
+
+  [[providers.provider.models]]
+  id = "mock-model"
+  name = "Mock Model"
+  request_name = "mock-model"
+  formats = ["chat"]
+  context_length = 32000
+  capabilities = ["tools"]
+  thinking_default = false
