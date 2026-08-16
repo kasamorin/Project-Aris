@@ -175,7 +175,12 @@ class AgentLoop:
                 )
             )
             for tc in tool_calls:
-                result = call("tools.execute", tc.name, tc.arguments)
+                # 对话文本作为 context 传入（去掉 system 提示词），供需要校验
+                # 「URL 是否在对话中出现」的工具（http_request）使用
+                ctx = "\n".join(
+                    m.content or "" for m in work if m.role != MessageRole.SYSTEM
+                )[-20000:]
+                result = call("tools.execute", tc.name, tc.arguments, context=ctx)
                 yield LoopEvent(type=LoopEventType.TOOL, name=tc.name, result=result)
                 work.append(
                     Message(role=MessageRole.TOOL, content=result, tool_call_id=tc.id)
