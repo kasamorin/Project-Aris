@@ -38,6 +38,7 @@ class LoopEventType(StrEnum):
     DELTA = "delta"            # 流式文本增量
     TOOL = "tool"              # 工具已执行（附 name + result）
     DONE = "done"              # 最终回答结束
+    STALL = "stall"            # 首字占位提示（超时无产出；不并入最终回答）
     INTERRUPTED = "interrupted"  # 用户中断（调用方应回滚未完成 user 消息）
 
 
@@ -53,12 +54,21 @@ _loop_config = load_config(LoopConfig(), "chat.toml")
 
 @dataclass
 class LoopEvent:
-    """agent loop 的产出事件，供上层（session）驱动流式。"""
+    """agent loop 的产出事件，供上层（session）驱动流式。
+
+    model_id / degraded / race_possible 仅 DONE 事件携带：
+    - model_id：本轮实际生效的模型（竞速/降级后可能不同于会话当前模型）
+    - degraded：本轮是否经过降级（竞速输给备选 / 模型级降级）
+    - race_possible：是否可参与下次「本家 vs 备选」竞速恢复
+    """
 
     type: str          # LoopEventType
     content: str = ""
     name: str = ""
     result: str = ""
+    model_id: str = ""
+    degraded: bool = False
+    race_possible: bool = False
 
 
 class AgentLoop:
@@ -90,28 +100,48 @@ class AgentLoop:
         *,
         thinking: bool | None = None,
         should_stop: ShouldStop | None = None,
+        race_model: str | None = None,
     ) -> Iterator[LoopEvent]:
         """迭代执行循环，产出事件流（流式文本 / 工具通知 / 结束标记）。
 
+        race_model：传入降级后实际生效的模型 id 时，本轮改为「本家 vs 备选」
+        并发竞速（llm.race）；DONE 携带实际生效的 model_id / degraded /
+        race_possible，供上层决定下一轮是否继续竞速恢复。
         以 interrupted 事件结束时表示被中断（调用方应回滚未完成的 user 消息）。
         """
         work = list(messages)
         tools = self.registry.definitions()
         for _ in range(self.max_rounds):
-            request = ChatRequest(
+            base_request = ChatRequest(
                 model_id=self.model_id,
                 messages=work,
                 tools=tools,
                 thinking=thinking,
             )
+            if race_model is not None and race_model != self.model_id:
+                fallback_request = ChatRequest(
+                    model_id=race_model,
+                    messages=work,
+                    tools=tools,
+                    thinking=thinking,
+                )
+                deltas = call("llm.race", base_request, fallback_request)
+            else:
+                deltas = call("llm.deltas", base_request)
             content = ""
             reasoning = ""
             tool_calls: list = []
             finish_reason: str | None = None
-            for delta in call("llm.deltas", request):
+            model_id: str | None = None
+            degraded = False
+            race_possible = False
+            for delta in deltas:
                 if should_stop is not None and should_stop():
                     yield LoopEvent(type=LoopEventType.INTERRUPTED)
                     return
+                if delta.stall:
+                    yield LoopEvent(type=LoopEventType.STALL, content=delta.content)
+                    continue
                 if delta.content:
                     content += delta.content
                     yield LoopEvent(type=LoopEventType.DELTA, content=delta.content)
@@ -120,10 +150,19 @@ class AgentLoop:
                 if delta.finish_reason:
                     finish_reason = delta.finish_reason
                     tool_calls = delta.tool_calls or []
+                    model_id = delta.model_id
+                    degraded = delta.degraded
+                    race_possible = delta.race_possible
 
             if finish_reason != FinishReason.TOOL_CALLS:
                 # 最终回答（或没有工具调用）
-                yield LoopEvent(type=LoopEventType.DONE, content=content)
+                yield LoopEvent(
+                    type=LoopEventType.DONE,
+                    content=content,
+                    model_id=model_id or self.model_id,
+                    degraded=degraded,
+                    race_possible=race_possible,
+                )
                 return
 
             # 执行工具并回填
@@ -136,11 +175,22 @@ class AgentLoop:
                 )
             )
             for tc in tool_calls:
-                result = call("tools.execute", tc.name, tc.arguments)
+                # 对话文本作为 context 传入（去掉 system 提示词），供需要校验
+                # 「URL 是否在对话中出现」的工具（http_request）使用
+                ctx = "\n".join(
+                    m.content or "" for m in work if m.role != MessageRole.SYSTEM
+                )[-20000:]
+                result = call("tools.execute", tc.name, tc.arguments, context=ctx)
                 yield LoopEvent(type=LoopEventType.TOOL, name=tc.name, result=result)
                 work.append(
                     Message(role=MessageRole.TOOL, content=result, tool_call_id=tc.id)
                 )
 
         # 达到轮数上限：返回最后一次输出（不视为中断）
-        yield LoopEvent(type=LoopEventType.DONE, content=content)
+        yield LoopEvent(
+            type=LoopEventType.DONE,
+            content=content,
+            model_id=model_id or self.model_id,
+            degraded=degraded,
+            race_possible=race_possible,
+        )

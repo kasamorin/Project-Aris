@@ -140,6 +140,8 @@ class ChatSession:
         self._loop = AgentLoop(
             engine, registry=self.registry, model_id=model_id
         )
+        # 降级恢复状态：降级后记住实际生效的模型，下一轮竞速回主模型
+        self._degraded_model: str | None = None
         log_dir = data_dir / "logs" / datetime.date.today().isoformat()
         log_dir.mkdir(parents=True, exist_ok=True)
         self._log_dir = log_dir
@@ -153,6 +155,7 @@ class ChatSession:
         """切换模型；id 不在可用列表时返回错误文本，不切换。"""
         if model_id in self.available_models:
             self.model_id = model_id
+            self._degraded_model = None  # 手动切模型：退出降级模式
             call("loop.set_model", model_id)
             return f"已切换模型：{model_id}"
         hint = "\n".join(f"  {mid}" for mid in self.available_models)
@@ -190,27 +193,47 @@ class ChatSession:
         text: str,
         should_stop: Callable[[], bool] | None = None,
         on_tool: Callable[[str, str], None] | None = None,
+        on_stall: Callable[[str], None] | None = None,
+        on_degraded: Callable[[str], None] | None = None,
     ) -> Iterator[str]:
         """发送一条用户消息，流式返回 Aris 回复。
 
         走 agent loop（LLM ↔ 工具）：文本增量逐段 yield，工具调用与结果
-        经 on_tool 回调通知。回复完成后把该轮问答写入对话日志。
+        经 on_tool 回调通知；首字占位经 on_stall、降级经 on_degraded 通知。
+        回复完成后把该轮问答写入对话日志。
         若 should_stop 回调返回 True，则中断并回滚未完成的 user 消息。
         """
         self.history.append(Message(role=MessageRole.USER, content=text))
         interrupted = False
         reply = ""
-        for event in call("loop.run", list(self.history), thinking=self.thinking, should_stop=should_stop):
+        for event in call(
+            "loop.run",
+            list(self.history),
+            thinking=self.thinking,
+            should_stop=should_stop,
+            race_model=self._degraded_model,
+        ):
             if event.type == LoopEventType.DELTA:
                 yield event.content
             elif event.type == LoopEventType.TOOL:
                 if on_tool is not None:
                     on_tool(event.name, event.result)
+            elif event.type == LoopEventType.STALL:
+                if on_stall is not None:
+                    on_stall(event.content)
             elif event.type == LoopEventType.INTERRUPTED:
                 interrupted = True
                 break
             elif event.type == LoopEventType.DONE:
                 reply = event.content
+                # 降级恢复状态：降级且可竞速 → 记住实际生效模型，下一轮竞速回主模型；
+                # 本家赢回 / 正常回答 → 退出降级模式
+                if event.degraded and event.race_possible:
+                    self._degraded_model = event.model_id
+                else:
+                    self._degraded_model = None
+                if event.degraded and on_degraded is not None:
+                    on_degraded(event.model_id)
         if interrupted:
             if self.history and self.history[-1].role == MessageRole.USER:
                 self.history.pop()  # 撤掉未完成轮次的用户消息
@@ -264,6 +287,10 @@ class ChatSession:
                     f"\n  [调用工具 {name} → {result[:_chat_config.tool_result_preview_len]}]\n",
                     end="",
                     flush=True,
+                ),
+                on_stall=lambda t: print(f"\n[{t}]\n", end="", flush=True),
+                on_degraded=lambda m: print(
+                    f"\n[已降级到模型: {m}]\n", end="", flush=True
                 ),
             ):
                 print(delta, end="", flush=True)

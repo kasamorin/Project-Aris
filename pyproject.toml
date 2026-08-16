@@ -1,6 +1,6 @@
 [project]
 name = "aris"
-version = "0.2.2"
+version = "0.2.5"
 description = "拟人 AI Aris —— 目标是社会学意义上的人"
 readme = "README.md"
 requires-python = ">=3.12"

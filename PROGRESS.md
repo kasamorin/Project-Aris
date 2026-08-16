@@ -1,6 +1,6 @@
 # 开发进度报告
 
-更新于：2026-08-12（Arch Linux 会话）
+更新于：2026-08-15（Arch Linux 会话）
 
 ## 已完成
 
@@ -137,6 +137,47 @@
   提交信息 commit-msg hook 校验（`.githooks/` + `scripts/install-git-hooks.sh`）、
   里程碑合并 bump minor + 打 `vX.Y.Z` tag。`oldWish` 分支（main 祖先）明确保留勿删。
   v0.2.0 作为首个里程碑 tag。
+- **fallback 竞速恢复上层接入（2026-08-15）**：`feat/llm-fallback-race` 分支落地，
+  已 `merge --no-ff` 合入 develop 并推送（`docs:` 分支流程亦同此验证 hook 规则）。
+  - loop：`iter_events` 新增 `race_model` 参数（传入降级后实际生效的模型时本轮
+    走 `llm.race` 竞速，本家 vs 备选）；STALL 占位增量独立产出为 STALL 事件，
+    不并入最终回答；DONE 携带 `model_id / degraded / race_possible` 元数据
+  - session：`ask()` 新增 `on_stall` / `on_degraded` 回调；维护 `_degraded_model`
+    降级恢复状态——降级且可竞速时记住实际生效模型，下一轮竞速回主模型，
+    主模型恢复后自动退出降级模式；手动 `/model` 切换也会清降级状态；
+    repl（非 TTY）打印占位与降级提示
+  - tui：新增 `StallNotice` / `DegradedNotice` 通知类，生成线程经回调入队，
+    `_consume` 消费展示（占位独占一行、降级提示单独一行）
+  - 验证：新增 `test_llm_upper.py` 26 项（loop 层 3 + session 层 4）+ 旧
+    `test_llm_fallback.py` 50 项全部通过，无回归
+- **http_request 通用 HTTP 工具（2026-08-15）**：`feat/http-request` 分支落地。
+  - 新增 `core.http` 统一 HTTP 服务（`core.call("http.request", ...)`），与 LLM
+    请求同理可审计、可复用；不拦截内网（个人本机助手）
+  - 新增内置工具 `http_request(url, method, headers, body, max_length, start_index,
+    raw)`：参考 kelivo_fetch MCP 设计，补齐 web_open(id) 两个短板（无法直接打开
+    对话中出现的 URL、长文无法续读）；支持 POST/PUT/PATCH/DELETE 发请求（body
+    自动 JSON 化），为 AstrBook 等外部能力提供接口基础
+  - URL 来源规则：只能请求对话中已出现的 URL（用户提供 / web_search 返回 / 之前
+    http_request 结果）——服务器侧 host 级软校验（`registry.execute` 支持注入对话
+    context，loop 拼好传入）；模型「提过一次即可放行」为固有边界
+  - GET + HTML 简化 markdown（trafilatura → bs4 兜底），max_length 有界、
+    start_index 续读（缓存最近响应全文）；raw=true 返回原始文本
+  - 验证：`test_http_request.py` 26 项（本地 mock server，不依赖外网）+ 旧
+    `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全部通过
+- **web 工具一致性重构（2026-08-15）**：web_search / web_open 的 httpx 直连
+  统一收口到 `core.http`（行为不变，纯一致性）。
+  - `core.http` 新增命名会话（session="xxx"）：同名多次请求复用同一
+    httpx.Client（cookie/连接连续），Bing「先首页拿 cookie 再搜索」靠它
+    保证 cookie 连续；不传 session 保持每次新建连接
+  - `_tavily_search` → `call("http.request", POST, ...)`；`_bing_search` →
+    两次 GET（首页 → 搜索）走 `session="bing"`，Firefox UA / form=QBRE
+    规则不变；`_do_web_open` → `call("http.request", GET)` +
+    `web_common.extract_page`（与 http_request 共用提取逻辑）；`_WEB_UA`
+    删除（与 DEFAULT_UA 相同）；httpx 依赖全部移除
+  - 旧版实现备份 `web_search.py.bak`（.gitignore 忽略不入库；git 历史亦有）
+  - 验证：新增 `test_web_migrate.py` 19 项（mock http.request 服务验证
+    路由/会话/UA/Tavily body）+ `test_http_request.py` 命名会话 cookie 连续
+    3 项；旧 `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全通过
 - **LLM 提供商与模型管理（阶段一，2026-08-14）**：`feat/provider-model-mgmt` 分支落地
   管理基础（详 `developDoc/LLM-PROVIDER-MGMT.md`）。
   - 提供方 schema 扩展：`default_model`（顶层）+ `LLMModel` 新增
@@ -182,7 +223,8 @@
   "我搜一下"），工具调用提示会把那段文字覆盖掉（`_show_tool` 直接截断
   到 `_state_start`）；且调用完输出紧跟同一行、无空格。已改 `_show_tool`
   区分「状态行活跃=等待首字」与「内容已输出」两种情形，后者另起一行显示
-  `[调用工具: 名称]`。脚本验证通过（test_tui_issue2.py），**待真机验证**。
+  `[调用工具: 名称]`。脚本验证通过（test_tui_issue2.py，临时脚本已于
+  2026-08-15 清理），**待真机验证**。
 - **Shift+Enter 换行失效（2026-08-09，已修复）**：当前绑定 CSI-u 序列
   `ESC[13;2u`，但实际输入框插入了「OM」两个字符——说明终端发送的是
   `ESC O M`（SS3 应用键序列）而非 CSI-u。已实测 prompt_toolkit 将 `ESC O M`

@@ -261,7 +261,7 @@ reporting，事件根本不发给应用，由终端自己做系统选中。因�
   与 `src/aris/behavior/__init__.py`、`src/aris/chat/session.py`（问题 1）、
   `PROGRESS.md`、本文档。
 - 临时验证脚本：`test_kb.py`、`test_tui_issue2.py`（仓库根目录，验证通过后
-  可删除）。
+  可删除；已于 2026-08-15 清理）。
 
 ## 恢复工作的步骤
 

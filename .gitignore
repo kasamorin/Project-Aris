@@ -18,6 +18,26 @@ config/providers.toml
 # 运行时数据（不进 git，备份见 README「数据与备份」）
 data/
 
+# 测试与静态工具缓存（pytest/ruff 等启用后自动产生）
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# 编辑器 / 系统杂项
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# 旧版备份（迁移留档，不入库）
+*.bak
+
+# 构建产物
+build/
+dist/
+
 # C 编译产物
 *.so
 *.o

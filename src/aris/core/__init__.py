@@ -12,6 +12,7 @@
 """
 
 from . import audit
+from . import http
 from .bus import (
     call,
     emit,
