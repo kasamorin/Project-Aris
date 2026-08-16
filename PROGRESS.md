@@ -164,6 +164,20 @@
     start_index 续读（缓存最近响应全文）；raw=true 返回原始文本
   - 验证：`test_http_request.py` 26 项（本地 mock server，不依赖外网）+ 旧
     `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全部通过
+- **web 工具一致性重构（2026-08-15）**：web_search / web_open 的 httpx 直连
+  统一收口到 `core.http`（行为不变，纯一致性）。
+  - `core.http` 新增命名会话（session="xxx"）：同名多次请求复用同一
+    httpx.Client（cookie/连接连续），Bing「先首页拿 cookie 再搜索」靠它
+    保证 cookie 连续；不传 session 保持每次新建连接
+  - `_tavily_search` → `call("http.request", POST, ...)`；`_bing_search` →
+    两次 GET（首页 → 搜索）走 `session="bing"`，Firefox UA / form=QBRE
+    规则不变；`_do_web_open` → `call("http.request", GET)` +
+    `web_common.extract_page`（与 http_request 共用提取逻辑）；`_WEB_UA`
+    删除（与 DEFAULT_UA 相同）；httpx 依赖全部移除
+  - 旧版实现备份 `web_search.py.bak`（.gitignore 忽略不入库；git 历史亦有）
+  - 验证：新增 `test_web_migrate.py` 19 项（mock http.request 服务验证
+    路由/会话/UA/Tavily body）+ `test_http_request.py` 命名会话 cookie 连续
+    3 项；旧 `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全通过
 - **LLM 提供商与模型管理（阶段一，2026-08-14）**：`feat/provider-model-mgmt` 分支落地
   管理基础（详 `developDoc/LLM-PROVIDER-MGMT.md`）。
   - 提供方 schema 扩展：`default_model`（顶层）+ `LLMModel` 新增
@@ -236,8 +250,6 @@
 2. 行为扩展续：下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
 3. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
 4. 语音链路（STT → LLM → TTS）
-5. web 工具一致性重构（已入 todo，2026-08-15 暂缓）：web_search / web_open 的
-   httpx 直连改走 `core.http` 服务（行为不变，纯一致性收口）
 
 ## 专项优化（暂缓）
 

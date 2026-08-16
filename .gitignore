@@ -31,6 +31,9 @@ htmlcov/
 *.swp
 .DS_Store
 
+# 旧版备份（迁移留档，不入库）
+*.bak
+
 # 构建产物
 build/
 dist/
