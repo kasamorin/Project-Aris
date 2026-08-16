@@ -20,10 +20,15 @@ ToolFn = Callable[..., Any]
 
 @dataclass
 class RegisteredTool:
-    """注册表里的一项：定义（给 LLM 看）+ 执行函数。"""
+    """注册表里的一项：定义（给 LLM 看）+ 执行函数。
+
+    needs_context：工具是否需要对话上下文（由 agent loop 拼好文本注入
+        `_context` 关键字，如 http_request 的 URL 来源校验）。
+    """
 
     definition: ToolDefinition
     fn: ToolFn
+    needs_context: bool = False
 
 
 class ToolRegistry:
@@ -41,28 +46,35 @@ class ToolRegistry:
         description: str,
         parameters: dict,
         fn: ToolFn,
+        needs_context: bool = False,
     ) -> None:
         """注册一个工具。重名时覆盖（后注册优先）。"""
         self._tools[name] = RegisteredTool(
             definition=ToolDefinition(name=name, description=description, parameters=parameters),
             fn=fn,
+            needs_context=needs_context,
         )
 
     def definitions(self) -> list[ToolDefinition]:
         """返回全部工具定义（按注册顺序），供请求携带。"""
         return [t.definition for t in self._tools.values()]
 
-    def execute(self, name: str, arguments: dict) -> str:
+    def execute(self, name: str, arguments: dict, *, context: str | None = None) -> str:
         """执行工具，返回文本形式的结果。
 
         工具不存在 / 参数不匹配 / 执行抛错时，都返回人类可读的错误文本
         （宽容降级：模型会读到错误并自己决定下一步）。
+        context：agent loop 传入的对话文本，仅注入给声明 needs_context 的工具
+        （http_request 用它做 URL 来源校验）。
         """
         tool = self._tools.get(name)
         if tool is None:
             return f"[工具 {name} 未注册，无法执行]"
         try:
-            result = tool.fn(**arguments)
+            if tool.needs_context:
+                result = tool.fn(**arguments, _context=context)
+            else:
+                result = tool.fn(**arguments)
         except TypeError as e:
             return f"[工具 {name} 调用失败，参数不匹配: {e}]"
         except Exception as e:  # noqa: BLE001 —— 工具实现错误统一降级

@@ -19,3 +19,9 @@ webopen_timeout_seconds = 20.0
 
 # web_open：返回正文最大长度（字符，截断省 token）
 webopen_max_chars = 4000
+
+# http_request：单次返回内容上限（字符，截断省 token）
+http_request_max_chars = 4000
+
+# http_request：请求超时（秒）
+http_request_timeout_seconds = 20.0

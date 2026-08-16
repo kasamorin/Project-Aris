@@ -150,6 +150,20 @@
     `_consume` 消费展示（占位独占一行、降级提示单独一行）
   - 验证：新增 `test_llm_upper.py` 26 项（loop 层 3 + session 层 4）+ 旧
     `test_llm_fallback.py` 50 项全部通过，无回归
+- **http_request 通用 HTTP 工具（2026-08-15）**：`feat/http-request` 分支落地。
+  - 新增 `core.http` 统一 HTTP 服务（`core.call("http.request", ...)`），与 LLM
+    请求同理可审计、可复用；不拦截内网（个人本机助手）
+  - 新增内置工具 `http_request(url, method, headers, body, max_length, start_index,
+    raw)`：参考 kelivo_fetch MCP 设计，补齐 web_open(id) 两个短板（无法直接打开
+    对话中出现的 URL、长文无法续读）；支持 POST/PUT/PATCH/DELETE 发请求（body
+    自动 JSON 化），为 AstrBook 等外部能力提供接口基础
+  - URL 来源规则：只能请求对话中已出现的 URL（用户提供 / web_search 返回 / 之前
+    http_request 结果）——服务器侧 host 级软校验（`registry.execute` 支持注入对话
+    context，loop 拼好传入）；模型「提过一次即可放行」为固有边界
+  - GET + HTML 简化 markdown（trafilatura → bs4 兜底），max_length 有界、
+    start_index 续读（缓存最近响应全文）；raw=true 返回原始文本
+  - 验证：`test_http_request.py` 26 项（本地 mock server，不依赖外网）+ 旧
+    `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全部通过
 - **LLM 提供商与模型管理（阶段一，2026-08-14）**：`feat/provider-model-mgmt` 分支落地
   管理基础（详 `developDoc/LLM-PROVIDER-MGMT.md`）。
   - 提供方 schema 扩展：`default_model`（顶层）+ `LLMModel` 新增
@@ -221,6 +235,8 @@
 2. 行为扩展续：下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
 3. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
 4. 语音链路（STT → LLM → TTS）
+5. web 工具一致性重构（已入 todo，2026-08-15 暂缓）：web_search / web_open 的
+   httpx 直连改走 `core.http` 服务（行为不变，纯一致性收口）
 
 ## 专项优化（暂缓）
 
