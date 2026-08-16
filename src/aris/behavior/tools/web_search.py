@@ -17,6 +17,10 @@ markdown 省 token）：
 
 失败策略（宽容降级）：所有引擎搜索失败返回错误文本 JSON 给模型消化，
 不抛到 UI（registry.execute 也会兜底）。
+
+HTTP 传输统一走 core.http（`core.call("http.request", ...)`，2026-08-15
+迁移）：可审计、可复用；Bing 的「先访问首页拿 cookie 再搜索」用 core.http
+命名会话（session="bing"）保证 cookie 连续。旧版实现见 web_search.py.bak。
 """
 
 from __future__ import annotations
@@ -34,6 +38,8 @@ from enum import StrEnum
 from loguru import logger
 
 from aris.cfgtoml import load_config
+from aris.core import call
+from .web_common import extract_page
 from ..registry import ToolRegistry
 
 
@@ -71,12 +77,6 @@ _TAVILY_URL = "https://api.tavily.com/search"
 # 最近一次搜索的 id → {title, url}，供 web_open 按 id 点开（覆盖式缓存）
 _recent_results: dict[int, dict[str, str]] = {}
 
-# 抓取网页用的浏览器 UA（部分站点对无 UA 请求 403）
-_WEB_UA = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-)
-
 # Bing 搜索用 Firefox UA（无需 sec-ch-ua 配套指纹，实测结果更稳定）
 _BING_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
 
@@ -90,20 +90,27 @@ def _tavily_search(query: str) -> str:
     key = os.environ.get("TAVILY_API_KEY", "")
     if not key:
         raise RuntimeError("TAVILY_API_KEY 未配置")
-    import httpx
-
-    resp = httpx.post(
+    resp = call(
+        "http.request",
+        "POST",
         _TAVILY_URL,
-        json={
-            "api_key": key,
-            "query": query,
-            "max_results": _search_config.results_count,
-            "include_answer": False,
-        },
+        headers={"Content-Type": "application/json"},
+        body=json.dumps(
+            {
+                "api_key": key,
+                "query": query,
+                "max_results": _search_config.results_count,
+                "include_answer": False,
+            },
+            ensure_ascii=False,
+        ),
         timeout=_search_config.timeout_seconds,
     )
-    resp.raise_for_status()
-    data = resp.json()
+    if resp is None:
+        raise RuntimeError("core 未注册 http.request 服务")
+    if resp.status >= 400:
+        raise RuntimeError(f"Tavily HTTP {resp.status}")
+    data = json.loads(resp.text)
     items = data.get("results", [])
     lines: list[str] = []
     _recent_results.clear()
@@ -160,7 +167,8 @@ def _bing_search(query: str) -> str:
     """Bing 网页搜索，返回 markdown 结果文本；失败抛异常。
 
     关键实现细节（2026-08-14 实测，直接影响结果质量）：
-    - 用 httpx.Client 会话：先访问首页拿 cookie（MUID 等），再搜索。
+    - 用 core.http 命名会话（session="bing"）：先访问首页拿 cookie（MUID 等），
+      再搜索。
       不带 cookie 时 Bing 偶发返回官网首页等低质量结果，稳定性差。
     - 带 form=QBRE 参数（真实浏览器搜索请求带此参数）。
     - UA 用 Firefox（无需 sec-ch-ua 配套指纹，实测结果稳定）；
@@ -168,7 +176,6 @@ def _bing_search(query: str) -> str:
     - 链接是 /ck/a 重定向包装，解码 u= 参数（base64）拿真实 URL。
     """
     from bs4 import BeautifulSoup
-    import httpx
 
     headers = {
         "User-Agent": _BING_UA,
@@ -176,14 +183,26 @@ def _bing_search(query: str) -> str:
     }
     encoded = urllib.parse.quote(query)
     search_url = f"https://www.bing.com/search?q={encoded}&form=QBRE"
-    with httpx.Client(
+    call(
+        "http.request",
+        "GET",
+        "https://www.bing.com/",
         headers=headers,
         timeout=_search_config.timeout_seconds,
-        follow_redirects=True,
-    ) as client:
-        client.get("https://www.bing.com/")
-        resp = client.get(search_url)
-    resp.raise_for_status()
+        session="bing",
+    )
+    resp = call(
+        "http.request",
+        "GET",
+        search_url,
+        headers=headers,
+        timeout=_search_config.timeout_seconds,
+        session="bing",
+    )
+    if resp is None:
+        raise RuntimeError("core 未注册 http.request 服务")
+    if resp.status >= 400:
+        raise RuntimeError(f"Bing HTTP {resp.status}")
     soup = BeautifulSoup(resp.text, "html.parser")
     items = soup.select("li.b_algo")
     if not items:
@@ -283,20 +302,19 @@ def _do_web_open(result_id: int) -> str:
             f"id {result_id} 不在最近的搜索结果里（需要先 web_search，且 id 有效）"
         )
     url = entry["url"]
-    import httpx
-
-    resp = httpx.get(
+    resp = call(
+        "http.request",
+        "GET",
         url,
-        headers={"User-Agent": _WEB_UA},
         timeout=_search_config.webopen_timeout_seconds,
-        follow_redirects=True,
     )
-    resp.raise_for_status()
+    if resp is None:
+        raise RuntimeError("core 未注册 http.request 服务")
+    if resp.status >= 400:
+        raise RuntimeError(f"HTTP {resp.status}")
 
-    # trafilatura：过滤导航/页脚/广告，提取正文纯文本
-    from trafilatura import extract
-
-    body = extract(resp.text, url=url)
+    # trafilatura（web_common.extract_page，bs4 兜底）：过滤导航/页脚/广告
+    body = extract_page(resp.text, url=url)
     if not body:
         raise RuntimeError(f"网页正文提取为空（可能是动态渲染页面）：{url}")
     body = body.strip()

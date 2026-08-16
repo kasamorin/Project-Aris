@@ -76,6 +76,18 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, RAW_HTML)
         elif self.path.startswith("/api"):
             self._send(200, '{"method": "GET"}', "application/json")
+        elif self.path.startswith("/cookie"):
+            cookie = self.headers.get("Cookie", "")
+            if not cookie:
+                self.send_response(200)
+                self.send_header("Set-Cookie", "sid=abc123; Path=/")
+            else:
+                self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            body = f"cookie={cookie}".encode()
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self._send(404, "not found")
 
@@ -192,6 +204,21 @@ def test_scheme_whitelist(server: MockHTTP, reg: ToolRegistry) -> None:
     check("提示仅支持", "仅支持 http/https" in out["error"], repr(out.get("error")))
 
 
+def test_session(server: MockHTTP, reg: ToolRegistry) -> None:
+    url = f"{server.base_url}/cookie"
+    from aris.core import call
+
+    # 无 session：每次新连接，cookie 不共享
+    r1 = call("http.request", "GET", url)
+    r2 = call("http.request", "GET", url)
+    check("无会话不共享 cookie", "sid=abc123" not in r1.text and "sid=abc123" not in r2.text)
+    # 命名会话：cookie 连续（第一次 Set-Cookie，第二次带回）
+    s1 = call("http.request", "GET", url, session="tsess")
+    s2 = call("http.request", "GET", url, session="tsess")
+    check("命名会话 cookie 连续", "sid=abc123" in s2.text, repr(s2.text))
+    check("首次访问无 cookie", "cookie=" in s1.text, repr(s1.text))
+
+
 def main() -> None:
     server = MockHTTP().start()
     reg = make_registry()
@@ -204,6 +231,7 @@ def main() -> None:
         test_url_rule,
         test_method_whitelist,
         test_scheme_whitelist,
+        test_session,
     ]
     for t in tests:
         print(f"\n== {t.__name__}")
