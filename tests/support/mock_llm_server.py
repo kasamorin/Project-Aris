@@ -97,6 +97,14 @@ class _Handler(BaseHTTPRequestHandler):
 
     # ---- 请求处理 ----
 
+    def do_GET(self) -> None:
+        mock: MockLLMServer = self.server.mock
+        parts = self.path.split("/")
+        if len(parts) >= 4 and parts[1] == "prov" and parts[3] == "models":
+            self._send_models(parts[2])
+            return
+        self._send_error(404)
+
     def do_POST(self) -> None:
         mock: MockLLMServer = self.server.mock
         body = self._read_body()
@@ -118,6 +126,19 @@ class _Handler(BaseHTTPRequestHandler):
         self._stream(scenario)
 
     # ---- 内部 ----
+
+    def _send_models(self, pid: str) -> None:
+        mock: MockLLMServer = self.server.mock
+        data = [
+            {"id": m, "object": "model", "created": 0, "owned_by": "mock"}
+            for m in mock.models_for(pid)
+        ]
+        payload = json.dumps({"object": "list", "data": data}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def _read_body(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
@@ -196,6 +217,7 @@ class MockLLMServer:
         self.lock = threading.Lock()
         self.scenarios: dict[tuple[str, str], Scenario] = {}
         self.counts: dict[tuple[str, str], int] = {}
+        self.models: dict[str, list[str]] = {}
         self.port = self._httpd.server_address[1]
         self._thread = threading.Thread(
             target=self._httpd.serve_forever, daemon=True
@@ -218,6 +240,15 @@ class MockLLMServer:
         with self.lock:
             self.scenarios[(pid, model)] = scenario
 
+    def register_models(self, pid: str, models: list[str]) -> None:
+        """注册某提供方 /models 返回的模型 id 列表。"""
+        with self.lock:
+            self.models[pid] = list(models)
+
+    def models_for(self, pid: str) -> list[str]:
+        with self.lock:
+            return self.models.get(pid, [])
+
     def scenario_for(self, pid: str, model: str) -> Scenario:
         with self.lock:
             return (
@@ -238,3 +269,75 @@ class MockLLMServer:
     def total_requests(self) -> int:
         with self.lock:
             return sum(self.counts.values())
+
+
+# ---------------------------------------------------------------- CLI 独立运行
+
+
+def main() -> None:
+    """独立运行 mock 提供方，供 `aris llm test` / `aris chat` / `llm fetch` 真机验证。
+
+    默认启动一个正常流式回复的提供方（pid=mock，模型 mock-model，端口 8765），
+    可用参数覆盖为错误序列 / 首字延迟 / 慢流等场景。Ctrl+C 停止。
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="本地 mock LLM 提供方（OpenAI Chat Completions 兼容）"
+    )
+    parser.add_argument("--port", type=int, default=8765, help="监听端口（默认 8765）")
+    parser.add_argument("--pid", default="mock", help="提供方 id（默认 mock）")
+    parser.add_argument("--model", default="mock-model", help="响应模型 id（默认 mock-model）")
+    parser.add_argument(
+        "--models",
+        default="mock-model",
+        help="GET /models 返回的模型列表，逗号分隔（默认 mock-model）",
+    )
+    parser.add_argument("--errors", default="", help="依次返回的错误状态码，逗号分隔（如 429,500）")
+    parser.add_argument("--first-delay", type=float, default=0.0, help="首字前阻塞秒数")
+    parser.add_argument("--chunk-delay", type=float, default=0.0, help="chunk 间阻塞秒数")
+    parser.add_argument("--text", default="你好，我是本地 mock 模型，LLM 链路正常。", help="回复文本")
+    parser.add_argument("--thinking", default="", help="思考链文本（可选）")
+    args = parser.parse_args()
+
+    server = MockLLMServer()
+    server.register_models(
+        args.pid, [m.strip() for m in args.models.split(",") if m.strip()]
+    )
+    scenario = Scenario(
+        errors=[int(e) for e in args.errors.split(",") if e.strip()],
+        first_delay=args.first_delay,
+        chunk_delay=args.chunk_delay,
+        chunks=[args.text],
+        thinking=[args.thinking] if args.thinking else [],
+    )
+    server.register(scenario, pid=args.pid, model=args.model)
+
+    # 手动绑定指定端口（ThreadingHTTPServer 默认绑定 0 自动分配）
+    server._httpd.server_close()
+    from http.server import ThreadingHTTPServer as _T
+
+    server._httpd = _T(("127.0.0.1", args.port), _Handler)
+    server._httpd.mock = server
+    server.port = args.port
+    server._thread = threading.Thread(target=server._httpd.serve_forever, daemon=True)
+    server.start()
+
+    base = server.base_url(args.pid)
+    print(f"mock 提供方启动: pid={args.pid}  base_url={base}")
+    print(f"  /models: {server.models_for(args.pid)}")
+    print(f"  场景: errors={scenario.errors} first_delay={args.first_delay} "
+          f"chunk_delay={args.chunk_delay} thinking={bool(scenario.thinking)}")
+    print("  测试: ARIS_LLM_PROVIDERS_FILE=config/providers.mock.toml "
+          "uv run aris llm test --model %s" % args.model)
+    print("  停止: Ctrl+C")
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        print("\nmock 提供方已停止")
+        server.stop()
+
+
+if __name__ == "__main__":
+    main()

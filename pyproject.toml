@@ -1,6 +1,6 @@
 [project]
 name = "aris"
-version = "0.2.5"
+version = "0.2.6"
 description = "拟人 AI Aris —— 目标是社会学意义上的人"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -18,6 +18,10 @@ dependencies = [
 [project.scripts]
 aris = "aris.cli:main"
 
+# 开发依赖（uv sync 默认安装 dev group；测试运行：uv run pytest）
+[dependency-groups]
+dev = ["pytest>=8"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -27,3 +31,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]

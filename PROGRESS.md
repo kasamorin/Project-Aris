@@ -1,6 +1,6 @@
 # 开发进度报告
 
-更新于：2026-08-15（Arch Linux 会话）
+更新于：2026-08-18（Arch Linux 会话）
 
 ## 已完成
 
@@ -164,6 +164,20 @@
     start_index 续读（缓存最近响应全文）；raw=true 返回原始文本
   - 验证：`test_http_request.py` 26 项（本地 mock server，不依赖外网）+ 旧
     `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全部通过
+- **pytest 测试框架落地（2026-08-18）**：根目录 4 个手写 `test_*.py`
+  + `mock_llm_server.py`（共 1535 行、手工 `check()` 断言 + 遍历式 `main()`）
+  迁移为 pytest 标准结构，根目录回归干净。
+  - 新建 `tests/`：`conftest.py`（全局静音 + 公共 fixture）+ `support/`
+    （`mock_llm_server.py` 原样迁移保留 CLI 独立运行能力、`mock_http.py`
+    提取 MockHTTP、`helpers.py` 收口两文件重复的 `build_engine`/`register`）
+  - 改写 4 个测试文件：`check(name, cond, detail)` → `assert cond, detail`，
+    `t_xxx` → `test_xxx`，删全局计数和 `main()`，MockLLMServer 生命周期交 fixture
+  - 隔离：`test_web_migrate` 的 fake http.request 由 fixture 注入/恢复，
+    防污染 `test_http_request` 里走真实 `call("http.request")` 的 session 用例
+  - pyproject.toml：`[dependency-groups] dev = ["pytest>=8"]`（uv PEP 735）、
+    `[tool.pytest.ini_options]` 配置 `testpaths/pythonpath`；`uv run pytest`
+    37 项全绿
+  - mock_llm_server 独立运行入口保留：`uv run python tests/support/mock_llm_server.py`
 - **web 工具一致性重构（2026-08-15）**：web_search / web_open 的 httpx 直连
   统一收口到 `core.http`（行为不变，纯一致性）。
   - `core.http` 新增命名会话（session="xxx"）：同名多次请求复用同一
@@ -178,6 +192,21 @@
   - 验证：新增 `test_web_migrate.py` 19 项（mock http.request 服务验证
     路由/会话/UA/Tavily body）+ `test_http_request.py` 命名会话 cookie 连续
     3 项；旧 `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全通过
+- **llm fetch 真机验证（2026-08-16）**：Arch 本机跑通阶段二全流程。
+  - 发现并修复 bug：`aris llm fetch` 启动即 NameError——`cli.py` 模块级
+    `_run_candidate_picker` 注解引用 `LLMModel` 但无模块级导入，补顶部导入
+  - 勾选 UI 真机全流程：pty 驱动选择 → 确认 → 写回 `providers.toml`
+    （新增 claude-fable-5，models.dev enrichment 完整 ctx 1M + tools/
+    reasoning/vision；备份 providers.toml.bak）；退休 ling/longcat/
+    north-mini-code 三个端点已下线的模型入 `retired_models.toml`
+  - 退休机制全验证：幂等重复 fetch 无重复条目 / 回归恢复（claude-sonnet-5
+    自动恢复） / 30 天宽限期过期（fake 条目被永久删除），验证后清理模拟条目
+  - OpenCode Zen 免费档实测持续 429 限流（环境问题，fallback 与错误广播
+    链路正常）→ 新增本地 mock 提供方：`mock_llm_server.py` 可独立运行
+    （CLI 支持 errors/first-delay/chunk-delay/thinking 场景 + /models 端点），
+    配套 `config/providers.mock.toml`（ARIS_LLM_PROVIDERS_FILE 切换）；
+    llm test（httpx/sdk 双传输）、429 重试退避恢复、fetch dry-run、
+    chat 单次（session/persona）全部对 mock 验证通过
 - **LLM 提供商与模型管理（阶段一，2026-08-14）**：`feat/provider-model-mgmt` 分支落地
   管理基础（详 `developDoc/LLM-PROVIDER-MGMT.md`）。
   - 提供方 schema 扩展：`default_model`（顶层）+ `LLMModel` 新增
@@ -203,7 +232,7 @@
 - 记忆架构（三层记忆模型，构想中、未完善，可能换）
 - STT 选型
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
-- 测试框架是否启用 pytest
+- ~~测试框架是否启用 pytest~~（已定：2026-08-18 启用 pytest，见已完成条目）
 - 打断 vs 缓存输入策略（见 AGENTS.md 待定节）
 - Google 搜索接入方式：Custom Search JSON API 已停新申请（2027-01 停服），
   候选 Gemini API Grounding（每日免费额度）或有头模式过反爬，实现前再定
@@ -246,7 +275,9 @@
    一体式（/models 拉取 + models.dev enrichment + 白名单勾选 UI + 写回）+
    退休机制（`config/retired_models.toml` 宽限期 30 天 + `aris llm retired`
    删除 TUI）已实现并验证，详 `developDoc/LLM-PROVIDER-MGMT.md`。
-   后续：真机验证勾选 UI；把真实端点 62 个模型同步进配置并挑选默认模型
+   真机验证已完成（2026-08-16，见已完成条目）。后续：决定是否把真实端点
+   62 个模型全量同步进配置并挑选默认模型（当前默认仍 deepseek-v4-flash-free，
+   端点限流 429 时可用本地 mock 测试链路）
 2. 行为扩展续：下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
 3. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
 4. 语音链路（STT → LLM → TTS）
