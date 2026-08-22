@@ -15,6 +15,9 @@ __pycache__/
 # LLM 提供方配置（含用户账号信息，模板见 config/providers.example.toml）
 config/providers.toml
 
+# 退休模型记录（机器维护，`aris llm fetch`/`retired` 运行时读写）
+config/retired_models.toml
+
 # 运行时数据（不进 git，备份见 README「数据与备份」）
 data/
 

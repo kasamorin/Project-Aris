@@ -1,6 +1,6 @@
 # 开发进度报告
 
-更新于：2026-08-15（Arch Linux 会话）
+更新于：2026-08-18（Arch Linux 会话）
 
 ## 已完成
 
@@ -164,6 +164,20 @@
     start_index 续读（缓存最近响应全文）；raw=true 返回原始文本
   - 验证：`test_http_request.py` 26 项（本地 mock server，不依赖外网）+ 旧
     `test_llm_fallback.py` 50 项 / `test_llm_upper.py` 26 项全部通过
+- **pytest 测试框架落地（2026-08-18）**：根目录 4 个手写 `test_*.py`
+  + `mock_llm_server.py`（共 1535 行、手工 `check()` 断言 + 遍历式 `main()`）
+  迁移为 pytest 标准结构，根目录回归干净。
+  - 新建 `tests/`：`conftest.py`（全局静音 + 公共 fixture）+ `support/`
+    （`mock_llm_server.py` 原样迁移保留 CLI 独立运行能力、`mock_http.py`
+    提取 MockHTTP、`helpers.py` 收口两文件重复的 `build_engine`/`register`）
+  - 改写 4 个测试文件：`check(name, cond, detail)` → `assert cond, detail`，
+    `t_xxx` → `test_xxx`，删全局计数和 `main()`，MockLLMServer 生命周期交 fixture
+  - 隔离：`test_web_migrate` 的 fake http.request 由 fixture 注入/恢复，
+    防污染 `test_http_request` 里走真实 `call("http.request")` 的 session 用例
+  - pyproject.toml：`[dependency-groups] dev = ["pytest>=8"]`（uv PEP 735）、
+    `[tool.pytest.ini_options]` 配置 `testpaths/pythonpath`；`uv run pytest`
+    37 项全绿
+  - mock_llm_server 独立运行入口保留：`uv run python tests/support/mock_llm_server.py`
 - **web 工具一致性重构（2026-08-15）**：web_search / web_open 的 httpx 直连
   统一收口到 `core.http`（行为不变，纯一致性）。
   - `core.http` 新增命名会话（session="xxx"）：同名多次请求复用同一
@@ -218,7 +232,7 @@
 - 记忆架构（三层记忆模型，构想中、未完善，可能换）
 - STT 选型
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
-- 测试框架是否启用 pytest
+- ~~测试框架是否启用 pytest~~（已定：2026-08-18 启用 pytest，见已完成条目）
 - 打断 vs 缓存输入策略（见 AGENTS.md 待定节）
 - Google 搜索接入方式：Custom Search JSON API 已停新申请（2027-01 停服），
   候选 Gemini API Grounding（每日免费额度）或有头模式过反爬，实现前再定
