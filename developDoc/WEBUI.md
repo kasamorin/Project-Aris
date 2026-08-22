@@ -12,7 +12,8 @@
 **做**：审计流水 / 提供商与模型管理（增删+fetch审核+退休） / 技能管理（增删改） /
 对话历史查看 / （占位）STT&TTS 管理 / （占位）输出审核。
 
-**不做**：网页对话。监听默认绑定 `127.0.0.1`。
+**不做**：网页对话。监听默认绑定 `0.0.0.0`（IPv4）+ `::`（IPv6），
+即本机及局域网均可访问（鉴权密码必设）。
 
 ## 技术栈
 
@@ -58,7 +59,7 @@ src/aris/webui/
     └── (UnoCSS 通过 CDN 引入，无需本地静态文件)
 ```
 
-CLI：`aris web --host 127.0.0.1 --port 8000`；host / port / session 天数进
+CLI：`aris web --host 0.0.0.0 --port 9690`；host / port / session 天数进
 `config/webui.toml`（cfgtoml 加载）。
 
 ## 页面清单（MVP，6 页）
@@ -120,6 +121,7 @@ CLI：`aris web --host 127.0.0.1 --port 8000`；host / port / session 天数进
 - 会话：登录成功签发 `aris_session` cookie（HMAC 签名令牌，payload 含
   签发时间 + 过期时间，`Max-Age=7 天`）；`/logout` 清除。
 - 未配置密码时：登录页提示配置，**拒绝登录**（不裸奔），而非跳过鉴权。
+- ⚠️ 默认绑定 `0.0.0.0` / `::`，网络可达——**密码必须设置**，否则等同暴露。
 - 起步仅密码，无账号体系；未来如需可加 token / 更细权限。
 
 ## 逻辑复用（定案）
@@ -138,8 +140,8 @@ load_retired`、`audit.query_recent / query_summary` 等），勾选 / 确认 / 
 `config/webui.toml`（cfgtoml）：
 
 ```toml
-host = "127.0.0.1"
-port = 8000
+host = "0.0.0.0"
+port = 9690
 session_days = 7
 ```
 
@@ -169,11 +171,63 @@ session_days = 7
 4. `/skills` 列出真实 skill 并展示 SKILL.md 全文；创建/编辑/删除流程。
 5. `/audit` SSE 实时日志流验证。
 6. `/history` 按日期加载对话记录。
-7. 手动起服过一遍（绑定 127.0.0.1）。
+7. 手动起服过一遍（默认绑定 0.0.0.0:9690，本机与局域网均可达）。
+
+## 实现前置决策（2026-08-22 审查，须在编码前定案）
+
+以下 8 项在设计审查中发现缺口，实现前必须明确：
+
+### P0：实现时绕不过去
+
+1. **对话历史格式未定义**
+   - `chat.log` 的具体结构未说明（JSON Lines？纯文本？字段有哪些？）。
+   - 实现 `/history` 页面时需要按格式解析，现在不定实现时必卡。
+   - 参考：当前 `chat/session.py` 写入格式是什么？`
+
+2. **Markdown 渲染方式未定**
+   - 技能管理要展示 SKILL.md 全文，需决定渲染方式。
+   - 候选：服务端渲染（Python `markdown` 库，输出 HTML 直出）vs
+     前端渲染（`marked.js` / `markdown-it` CDN，模板输出原始 Markdown）。
+   - 影响：依赖选择 + 模板结构 + XSS 防护策略。
+
+3. **SSE 端点鉴权方式**
+   - 审计 SSE 是长连接，跨设备访问时必须认证。
+   - 候选：cookie（与页面同源，自动携带）vs token query param（SSE 连接
+     不支持自定义 header，需走 query string）。
+   - 注：HTMX 的 `hx-sse` 扩展默认不带 cookie——需验证或改用原生
+     `EventSource`。
+
+### P1：有隐患，MVP 应处理
+
+4. **Cookie 安全属性**
+   - 当前仅描述 `Max-Age=7 天`，缺少 `HttpOnly` / `SameSite` / `Secure`。
+   - 绑定 `0.0.0.0` 后这些属性直接影响安全性。
+   - `Secure` 在无 HTTPS 时不能设（会拒绝发送），需明确策略。
+
+5. **登录失败限流**
+   - 默认绑定全接口，暴力破解是现实威胁。
+   - MVP 至少做基础限流（如 5 次失败锁 5 分钟），不能全推到「后续」。
+   - 实现方式：内存计数器（单进程够用）vs 文件/数据库（多进程安全）。
+
+6. **提供商健康状态来源**
+   - 仪表盘展示「提供商健康状态」，但未说明判断方式。
+   - 候选：调 `llm.check` 逻辑（同步、慢）vs 被动记录（请求失败时
+     标记）vs 后台定时探测（需后台任务）。
+   - 影响：仪表盘加载延迟 vs 实时性取舍。
+
+### P2：不急但应记录
+
+7. **`--host` / `--port` CLI 与 toml 优先级**
+   - CLI 参数与 `config/webui.toml` 谁覆盖谁未明确。
+   - 建议：CLI > toml > 代码默认值（常规优先级）。
+
+8. **`plugins.html` 模板缺失**
+   - 模块结构 `routes/plugins.py` 列出但模板列表无 `plugins.html`。
+   - 占位页也需要空模板（否则路由报错）。
 
 ## 后续讨论（未定事项）
 
-1. 更细鉴权（token、角色、CSRF 防护策略）。
+1. 更细鉴权（token、角色）。
 2. `/plugins`、`/voice`、`/moderation` 随对应模块落地。
 3. 是否暴露 REST API 供移动端 / 其他客户端调用（现阶段页面直调内部函数，
    需要时再加 API 层）。
