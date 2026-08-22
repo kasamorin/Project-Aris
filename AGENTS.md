@@ -26,6 +26,9 @@
   持续演进的世界观、人际关系网和成长轨迹
 - 纯个人项目，但可维护性为最高优先级，目标运行数年
 - 开发节奏：先跑通核心链路（STT → LLM → TTS），再逐层叠加能力
+- **交互形态**：最终以**语音为主**（STT → LLM → TTS），文字为辅且不通过 TUI，
+  而是接入外部平台（Matrix / Discord 等）。TUI 定位为**开发调试手段**，
+  WebUI 定位为**运维管理后台**（非对话界面）
 - 详细蓝图见 `developDoc/Project-Aris.md`
 
 ## 开发环境
@@ -189,7 +192,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   目录化 skill，`SKILL.md` + 可选 `tools.py`；`SkillManager` 发现/菜单/激活，
   三层渐进式披露，详见 `developDoc/SKILLS.md`）；MCP 后续作为工具来源注册进 registry
 - `chat/` —— 文字对话（已实现）：`session.py`（会话逻辑）、`tui.py`（全屏界面）、
-  `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环
+  `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环。
+  **TUI 定位为开发调试手段**，项目成型后的主要对话界面是 WebUI（见 developDoc/WEBUI.md），
+  TUI 保留作为无 GUI 环境下的调试与快速验证入口
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
   届时再评估是否独立成模块
 
