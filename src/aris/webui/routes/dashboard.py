@@ -38,12 +38,12 @@ def _gather_stats() -> dict:
     # 审计条目数
     audit_count = 0
     try:
-        from ...core import call
-        result = call("audit.query_summary")
+        from ...core.audit import query_summary
+        result = query_summary()
         if result and isinstance(result, dict):
             audit_count = result.get("total", 0)
     except Exception:
-        pass  # 审计服务未注册时静默
+        pass
 
     # 技能数
     skills_count = 0

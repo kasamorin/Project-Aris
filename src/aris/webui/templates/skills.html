@@ -3,21 +3,37 @@
 {% block content %}
 <div class="flex justify-between items-center mb-6">
     <h2 class="text-2xl font-semibold">技能管理</h2>
-    <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+    <button onclick="createSkill()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
         + 创建技能
     </button>
 </div>
 
+{% if error %}
+<div class="bg-red-50 text-red-700 text-sm p-3 rounded mb-4">{{ error }}</div>
+{% endif %}
+
+{% if skills %}
 <div class="grid grid-cols-3 gap-4">
     {% for skill in skills %}
-    <div class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+    <a href="/skills/{{ skill.name }}" class="block bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
         <h3 class="font-medium mb-1">{{ skill.name }}</h3>
-        <p class="text-sm text-gray-500 mb-3">{{ skill.description }}</p>
-        <div class="flex gap-2">
-            <a href="/skills/{{ skill.name }}" class="text-sm text-blue-600 hover:underline">查看</a>
-            <a href="/skills/{{ skill.name }}/edit" class="text-sm text-gray-500 hover:underline">编辑</a>
-        </div>
-    </div>
+        <p class="text-sm text-gray-500">{{ skill.description or '（无描述）' }}</p>
+    </a>
     {% endfor %}
 </div>
+{% else %}
+<div class="bg-white rounded-lg shadow p-8 text-center">
+    <p class="text-gray-400">暂无技能</p>
+    <p class="text-sm text-gray-400 mt-2">在 skills/ 目录下创建子目录并添加 SKILL.md</p>
+</div>
+{% endif %}
+
+<script>
+function createSkill() {
+    const name = prompt('输入技能名称（英文，如 web-search）：');
+    if (!name) return;
+    // TODO: 实现创建逻辑
+    alert('创建功能待实现：' + name);
+}
+</script>
 {% endblock %}

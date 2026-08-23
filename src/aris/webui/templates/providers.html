@@ -13,7 +13,7 @@
                 <div class="font-medium">{{ p.name }}</div>
                 <div class="text-xs text-gray-500">
                     {{ p.model_count }} 个模型 ·
-                    {% if p.key_ok %}✅{% else %}❌{% endif %}
+                    {% if p.key_ok %}✅ 密钥就位{% else %}❌ 缺密钥{% endif %}
                 </div>
             </a>
             {% endfor %}
@@ -21,9 +21,53 @@
     </div>
     <!-- 右侧：详情 -->
     <div class="col-span-2">
+        {% set provider = providers | selectattr("id", "equalto", selected) | first %}
+        {% if provider %}
+        <div class="bg-white rounded-lg shadow">
+            <!-- 提供方信息 -->
+            <div class="p-4 border-b border-gray-200">
+                <h3 class="font-medium text-lg">{{ provider.name }}</h3>
+                <div class="text-sm text-gray-500 mt-1">
+                    <span class="font-mono">{{ provider.base_url }}</span>
+                </div>
+                <div class="text-sm text-gray-500">
+                    密钥环境变量：
+                    <span class="font-mono">{{ provider.key_env }}</span>
+                    {% if provider.key_ok %}✅{% else %}❌{% endif %}
+                </div>
+            </div>
+            <!-- 模型列表 -->
+            <div class="p-4">
+                <h4 class="font-medium mb-3">模型列表（{{ provider.models | length }}）</h4>
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">ID</th>
+                            <th class="px-3 py-2 text-left">名称</th>
+                            <th class="px-3 py-2 text-left">上下文</th>
+                            <th class="px-3 py-2 text-left">能力</th>
+                            <th class="px-3 py-2 text-left">思考</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in provider.models %}
+                        <tr class="border-t border-gray-100 hover:bg-gray-50">
+                            <td class="px-3 py-2 font-mono text-xs">{{ m.id }}</td>
+                            <td class="px-3 py-2">{{ m.name }}</td>
+                            <td class="px-3 py-2">{{ m.context }}</td>
+                            <td class="px-3 py-2 text-xs">{{ m.capabilities }}</td>
+                            <td class="px-3 py-2 text-xs">{{ m.thinking_default }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
         <div class="bg-white rounded-lg shadow p-4">
             <p class="text-gray-400">选择左侧提供方查看详情</p>
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

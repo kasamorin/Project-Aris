@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ skill.name }} - 技能管理 - Project-Aris{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <a href="/skills" class="text-sm text-blue-600 hover:underline">← 返回技能列表</a>
+        <h2 class="text-2xl font-semibold mt-1">{{ skill.name }}</h2>
+    </div>
+    <div class="flex gap-2">
+        <a href="/skills/{{ skill.name }}/edit"
+           class="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300">编辑</a>
+        <button onclick="deleteSkill('{{ skill.name }}')"
+                class="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200">删除</button>
+    </div>
+</div>
+
+{% if skill.has_tools %}
+<div class="bg-yellow-50 text-yellow-700 text-sm p-3 rounded mb-4">
+    ⚠️ 该技能包含 tools.py（自定义工具）
+</div>
+{% endif %}
+
+<!-- Markdown 渲染区域 -->
+<div class="bg-white rounded-lg shadow p-6">
+    <div id="skill-content" class="prose max-w-none"></div>
+    <textarea id="skill-raw" class="hidden">{{ skill.content }}</textarea>
+</div>
+
+<script src="/static/marked.min.js"></script>
+<script>
+    const raw = document.getElementById('skill-raw').value;
+    document.getElementById('skill-content').innerHTML = marked.parse(raw);
+</script>
+
+<script>
+function deleteSkill(name) {
+    if (confirm('确定要删除技能 "' + name + '" 吗？此操作不可撤销。')) {
+        // TODO: 实现删除逻辑
+        alert('删除功能待实现');
+    }
+}
+</script>
+{% endblock %}

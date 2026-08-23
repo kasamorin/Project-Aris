@@ -35,11 +35,25 @@ def _load_providers() -> list[dict]:
         result = []
         for p in providers.ordered_providers():
             key_ok = bool(os.environ.get(p.api_key_env))
+            models = []
+            for m in p.models:
+                caps = ", ".join(m.capabilities) if m.capabilities else "-"
+                ctx = f"{m.context_length // 1000}K" if m.context_length else "-"
+                models.append({
+                    "id": m.id,
+                    "name": m.name,
+                    "context": ctx,
+                    "capabilities": caps,
+                    "thinking_default": str(m.thinking_default) if m.thinking_default is not None else "跟随",
+                })
             result.append({
                 "id": p.id,
                 "name": p.name,
-                "model_count": len(p.models),
+                "base_url": p.base_url,
                 "key_ok": key_ok,
+                "key_env": p.api_key_env,
+                "model_count": len(p.models),
+                "models": models,
             })
         return result
     except Exception:

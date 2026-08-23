@@ -33,14 +33,23 @@ def _query_records(
 ) -> list[dict]:
     """查询审计记录。"""
     try:
-        from ...core import call
-        result = call(
-            "audit.query_recent",
-            limit=page_size,
-            offset=(page - 1) * page_size,
-        )
-        if result:
-            return result if isinstance(result, list) else []
+        from ...core.audit import query_recent
+        records = query_recent(limit=page_size)
+        result = []
+        for r in records:
+            # 过滤
+            if module and r.target.split(".")[0] != module:
+                continue
+            if action and action not in r.target:
+                continue
+            result.append({
+                "ts": f"{r.duration*1000:.0f}ms",
+                "module": r.target.split(".")[0] if "." in r.target else r.target,
+                "action": r.target,
+                "result": "success" if r.ok else "error",
+                "detail": r.detail or "",
+            })
+        return result
     except Exception:
         pass
     return []
