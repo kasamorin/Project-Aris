@@ -25,7 +25,7 @@
 | 后端 | FastAPI + uvicorn | 异步、pydantic 已是依赖、表单/模板/静态齐备 |
 | 模板 | Jinja2（服务端渲染） | `{% extends %}` + `{% include %}` 模板继承，公共组件（导航栏、页头）复用 |
 | 前端交互 | htmx | 启停开关、fetch 审核勾选、页面局部刷新，无需 SPA |
-| 样式 | UnoCSS（本地文件） | 从 CDN 下载到 `static/`，零构建步骤，原子化 CSS 写法，VitePress 风格简洁现代 |
+| 样式 | UnoCSS runtime（本地文件） | 从 CDN 下载到 `static/`（~180KB），零构建步骤，原子化 CSS 写法，VitePress 风格简洁现代 |
 | Markdown | marked.js（本地文件） | 从 CDN 下载到 `static/`，前端渲染 SKILL.md 全文，零 Python 依赖 |
 | 实时 | SSE | 审计日志流 + 实时日志流推送 |
 | 新增依赖 | `fastapi` / `uvicorn` / `jinja2` / `python-multipart` | 后两者：模板渲染 + 表单解析 |
@@ -64,8 +64,8 @@ src/aris/webui/
 │   ├── logs.html
 │   └── history.html   # 占位页
 └── static/
-    ├── uno.css        # UnoCSS（从 CDN 下载）
-    └── marked.min.js  # marked.js（从 CDN 下载）
+    ├── uno.js         # UnoCSS runtime（从 CDN 下载，~180KB）
+    └── marked.min.js  # marked.js（从 CDN 下载，~40KB）
 ```
 
 CLI：`aris web --host 0.0.0.0 --port 9690`；host / port / session 天数进

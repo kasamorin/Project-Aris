@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}配置管理 - Project-Aris{% endblock %}
+{% block content %}
+<h2 class="text-2xl font-semibold mb-6">配置管理</h2>
+
+<!-- .env 状态（只读） -->
+<div class="bg-white rounded-lg shadow p-4 mb-6">
+    <h3 class="font-medium mb-3">环境变量状态</h3>
+    <div class="grid grid-cols-3 gap-2 text-sm">
+        {% for var in env_vars %}
+        <div class="flex items-center gap-2">
+            <span>{% if var.configured %}✅{% else %}❌{% endif %}</span>
+            <span class="font-mono text-gray-600">{{ var.name }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 模块配置 -->
+<div class="grid grid-cols-4 gap-6">
+    <!-- 左侧：模块列表 -->
+    <div class="col-span-1">
+        <div class="bg-white rounded-lg shadow">
+            {% for mod in modules %}
+            <a href="/config?module={{ mod.name }}"
+               class="block p-3 border-b border-gray-100 hover:bg-gray-50 text-sm
+                      {% if current_module == mod.name %}bg-blue-50 font-medium{% endif %}">
+                {{ mod.label }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    <!-- 右侧：配置表单 -->
+    <div class="col-span-3">
+        <div class="bg-white rounded-lg shadow p-4">
+            {% if current_module %}
+            <h3 class="font-medium mb-4">{{ current_module_label }}</h3>
+            <form method="post" action="/config/save">
+                <input type="hidden" name="module" value="{{ current_module }}">
+                {% for field in fields %}
+                <div class="mb-3">
+                    <label class="block text-sm text-gray-600 mb-1">{{ field.key }}</label>
+                    <input type="text" name="{{ field.key }}" value="{{ field.value }}"
+                           class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm
+                                  font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {% if field.description %}
+                    <p class="text-xs text-gray-400 mt-1">{{ field.description }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+                    保存（重启生效）
+                </button>
+            </form>
+            {% else %}
+            <p class="text-gray-400">选择左侧模块查看配置</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

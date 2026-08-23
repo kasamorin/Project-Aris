@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}日志查看 - Project-Aris{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-semibold">日志查看</h2>
+    <button id="log-sse-toggle" class="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300">
+        ▶ 实时
+    </button>
+</div>
+
+<div class="grid grid-cols-4 gap-6">
+    <!-- 左侧：日期 + 文件列表 -->
+    <div class="col-span-1">
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-3 border-b border-gray-200">
+                <input type="date" class="w-full px-2 py-1 border border-gray-300 rounded text-sm">
+            </div>
+            {% for file in log_files %}
+            <a href="/logs?file={{ file.name }}"
+               class="block px-3 py-2 border-b border-gray-100 hover:bg-gray-50 text-sm font-mono
+                      {% if current_file == file.name %}bg-blue-50{% endif %}">
+                {{ file.name }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    <!-- 右侧：日志内容 -->
+    <div class="col-span-3">
+        <div class="bg-gray-900 rounded-lg shadow p-4 h-[600px] overflow-y-auto font-mono text-sm">
+            <pre id="log-content" class="text-gray-300 whitespace-pre-wrap">{{ log_content }}</pre>
+        </div>
+    </div>
+</div>
+{% endblock %}

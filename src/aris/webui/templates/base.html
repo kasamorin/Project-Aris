@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Project-Aris WebUI{% endblock %}</title>
+    <script src="/static/uno.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- 左侧导航栏 -->
+        <nav class="w-56 bg-white border-r border-gray-200 flex flex-col fixed h-full">
+            <div class="p-4 border-b border-gray-200">
+                <h1 class="text-lg font-semibold text-gray-800">Project-Aris</h1>
+                <a href="https://github.com/kasamorin/Project-Aris" target="_blank"
+                   class="text-xs text-gray-400 hover:text-gray-600">
+                    GitHub ↗
+                </a>
+            </div>
+            <div class="flex-1 py-2">
+                <a href="/" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+                    <span>📊</span> 仪表盘
+                </a>
+                <a href="/audit" class="nav-item {% if active_page == 'audit' %}active{% endif %}">
+                    <span>📋</span> 审计
+                </a>
+                <a href="/providers" class="nav-item {% if active_page == 'providers' %}active{% endif %}">
+                    <span>🔌</span> 提供商
+                </a>
+                <a href="/skills" class="nav-item {% if active_page == 'skills' %}active{% endif %}">
+                    <span>🧩</span> 技能
+                </a>
+                <a href="/config" class="nav-item {% if active_page == 'config' %}active{% endif %}">
+                    <span>⚙️</span> 配置
+                </a>
+                <a href="/logs" class="nav-item {% if active_page == 'logs' %}active{% endif %}">
+                    <span>📄</span> 日志
+                </a>
+                <a href="/history" class="nav-item text-gray-400 {% if active_page == 'history' %}active{% endif %}">
+                    <span>💬</span> 历史
+                </a>
+            </div>
+            <div class="p-4 border-t border-gray-200">
+                <a href="/logout" class="nav-item text-red-600">
+                    <span>🚪</span> 退出
+                </a>
+            </div>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="flex-1 ml-56 p-6">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <style>
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            color: #374151;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: background-color 0.15s;
+        }
+        .nav-item:hover {
+            background-color: #f3f4f6;
+        }
+        .nav-item.active {
+            background-color: #eff6ff;
+            color: #2563eb;
+            font-weight: 500;
+        }
+    </style>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

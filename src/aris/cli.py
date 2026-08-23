@@ -10,6 +10,7 @@
 import argparse
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
@@ -518,6 +519,28 @@ def _cmd_llm_retired(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_web(args: argparse.Namespace) -> int:
+    """启动 WebUI 管理后台。"""
+    from .webui import create_app
+    from .cfgtoml import load_config
+
+    @dataclass
+    class WebUIConfig:
+        host: str = "0.0.0.0"
+        port: int = 9690
+
+    web_config = load_config(WebUIConfig(), "webui.toml")
+
+    host = args.host or web_config.host
+    port = args.port or web_config.port
+
+    import uvicorn
+    app = create_app()
+    logger.info(f"WebUI 启动：http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port, log_level="info")
+    return 0
+
+
 def _cmd_chat(args: argparse.Namespace) -> int:
     """文字对话：有消息参数走单次问答，无参数进入交互循环。"""
     from aris.chat import ChatSession
@@ -642,6 +665,11 @@ def main(argv: list[str] | None = None) -> int:
         help="禁用工具调用（默认开启内置工具）",
     )
     p_chat.set_defaults(func=_cmd_chat)
+
+    p_web = sub.add_parser("web", help="启动 WebUI 管理后台")
+    p_web.add_argument("--host", default=None, help="监听地址（默认 0.0.0.0）")
+    p_web.add_argument("--port", default=None, type=int, help="监听端口（默认 9690）")
+    p_web.set_defaults(func=_cmd_web)
 
     args = parser.parse_args(argv)
     settings = get_settings()

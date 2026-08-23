@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}提供商管理 - Project-Aris{% endblock %}
+{% block content %}
+<h2 class="text-2xl font-semibold mb-6">提供商管理</h2>
+<div class="grid grid-cols-3 gap-6">
+    <!-- 左侧：提供方列表 -->
+    <div class="col-span-1">
+        <div class="bg-white rounded-lg shadow">
+            {% for p in providers %}
+            <a href="/providers?selected={{ p.id }}"
+               class="block p-4 border-b border-gray-100 hover:bg-gray-50
+                      {% if selected == p.id %}bg-blue-50{% endif %}">
+                <div class="font-medium">{{ p.name }}</div>
+                <div class="text-xs text-gray-500">
+                    {{ p.model_count }} 个模型 ·
+                    {% if p.key_ok %}✅{% else %}❌{% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    <!-- 右侧：详情 -->
+    <div class="col-span-2">
+        <div class="bg-white rounded-lg shadow p-4">
+            <p class="text-gray-400">选择左侧提供方查看详情</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
