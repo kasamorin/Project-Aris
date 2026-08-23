@@ -83,6 +83,43 @@ async def retired_delete(model: str) -> RedirectResponse:
     return RedirectResponse(url="/providers?tab=retired", status_code=303)
 
 
+@router.get("/providers/{pid}/fetch", response_class=HTMLResponse)
+async def provider_fetch_page(
+    request: Request,
+    pid: str,
+) -> HTMLResponse:
+    """fetch 审核页面：拉取端点模型 → 对比 → 勾选 → 写回。"""
+    result = _do_fetch(pid)
+    if "error" in result:
+        return render(request, "providers.html", {
+            "active_page": "providers",
+            "providers": _load_providers(),
+            "selected": pid,
+            "tab": "models",
+            "error": result["error"],
+        })
+    return render(request, "fetch.html", {
+        "active_page": "providers",
+        "pid": pid,
+        "provider_name": result["provider_name"],
+        "added": result["added"],
+        "kept": result["kept"],
+        "missing": result["missing"],
+        "restored": result["restored"],
+        "retired_now": result["retired_now"],
+    })
+
+
+@router.post("/providers/{pid}/fetch/apply", response_model=None)
+async def provider_fetch_apply(
+    pid: str,
+    selected: list[str] = Form([]),
+) -> RedirectResponse:
+    """应用 fetch 结果：勾选的候选写入 providers.toml。"""
+    _apply_fetch(pid, selected)
+    return RedirectResponse(url=f"/providers?selected={pid}", status_code=303)
+
+
 def _load_providers() -> list[dict]:
     """加载提供方列表。"""
     try:
@@ -128,6 +165,83 @@ def _load_retired() -> list[dict]:
         return []
 
 
+def _do_fetch(pid: str) -> dict:
+    """执行 fetch：拉取端点模型 → 对比 → 返回 diff。"""
+    try:
+        from ...core.llm import load_providers
+        from ...core.llm.fetch import fetch_provider_models, load_retired, modelsdev_load, plan_sync
+        from ...config import get_settings
+        settings = get_settings()
+        providers = load_providers(settings.llm_providers_file)
+
+        # 找到目标提供方
+        provider = None
+        for p in providers.providers:
+            if p.id == pid:
+                provider = p
+                break
+        if provider is None:
+            return {"error": f"提供方 {pid} 不存在"}
+
+        # 拉取端点模型
+        endpoint_ids = fetch_provider_models(provider)
+
+        # 加载退休记录和 models.dev
+        retired = load_retired()
+        modelsdev = modelsdev_load(settings.data_dir)
+
+        # 生成同步计划
+        plan = plan_sync(provider, endpoint_ids, retired, modelsdev)
+
+        return {
+            "provider_name": provider.name,
+            "added": [{"id": c.id, "name": c.name, "context": f"{c.context_length // 1000}K" if c.context_length else "-"} for c in plan.candidates],
+            "kept": plan.diff.kept,
+            "missing": plan.diff.missing,
+            "restored": plan.retire.restored,
+            "retired_now": [e.model for e in plan.retire.retired_now],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _apply_fetch(pid: str, selected: list[str]) -> None:
+    """应用 fetch 结果。"""
+    try:
+        from ...core.llm import load_providers
+        from ...core.llm.fetch import (
+            fetch_provider_models, load_retired, modelsdev_load,
+            plan_sync, apply_sync, retired_file_path,
+        )
+        from ...config import get_settings
+        settings = get_settings()
+        providers = load_providers(settings.llm_providers_file)
+
+        provider = None
+        for p in providers.providers:
+            if p.id == pid:
+                provider = p
+                break
+        if provider is None:
+            return
+
+        endpoint_ids = fetch_provider_models(provider)
+        retired = load_retired()
+        modelsdev = modelsdev_load(settings.data_dir)
+        plan = plan_sync(provider, endpoint_ids, retired, modelsdev)
+
+        apply_sync(
+            plan,
+            selected,
+            cfg=providers,
+            providers_path=settings.llm_providers_file,
+            retired=retired,
+            retired_path=retired_file_path(),
+        )
+    except Exception:
+        pass
+
+
 def _add_provider(pid: str, name: str, base_url: str, api_key_env: str) -> None:
     """添加新提供方到 providers.toml。"""
     from ...config import get_settings
@@ -136,11 +250,9 @@ def _add_provider(pid: str, name: str, base_url: str, api_key_env: str) -> None:
 
     content = path.read_text(encoding="utf-8") if path.exists() else ""
 
-    # 检查是否已存在
     if f'id = "{pid}"' in content:
         return
 
-    # 追加新提供方
     new_provider = f'''
 [[providers.provider]]
 id = "{pid}"
@@ -186,11 +298,9 @@ def _add_model(pid: str, model_id: str, model_name: str, context_length: int) ->
 
     content = path.read_text(encoding="utf-8")
 
-    # 检查模型是否已存在
     if f'id = "{model_id}"' in content:
         return
 
-    # 找到提供方位置，在其 models 列表末尾追加
     lines = content.split("\n")
     result = []
     in_provider = False
@@ -200,7 +310,6 @@ def _add_model(pid: str, model_id: str, model_name: str, context_length: int) ->
         if f'id = "{pid}"' in line:
             in_provider = True
         if in_provider and not inserted:
-            # 找到该提供方的最后一个 model 块后插入
             if i + 1 < len(lines) and not lines[i + 1].strip().startswith("[[providers"):
                 if line.strip().startswith("thinking_default") or line.strip().startswith("capabilities"):
                     new_model = f'''

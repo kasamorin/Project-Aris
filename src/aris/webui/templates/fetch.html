@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}同步模型 - {{ provider_name }} - Project-Aris{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <a href="/providers?selected={{ pid }}" class="text-sm text-blue-600 hover:underline">← 返回 {{ provider_name }}</a>
+    <h2 class="text-2xl font-semibold mt-1">同步模型：{{ provider_name }}</h2>
+</div>
+
+<form method="post" action="/providers/{{ pid }}/fetch/apply">
+    <!-- 新增候选 -->
+    {% if added %}
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+        <h3 class="font-medium mb-3 text-green-700">➕ 新增候选（{{ added | length }}）</h3>
+        <p class="text-sm text-gray-500 mb-3">勾选要添加的模型：</p>
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-3 py-2 text-left w-10">选择</th>
+                    <th class="px-3 py-2 text-left">ID</th>
+                    <th class="px-3 py-2 text-left">名称</th>
+                    <th class="px-3 py-2 text-left">上下文</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in added %}
+                <tr class="border-t border-gray-100">
+                    <td class="px-3 py-2">
+                        <input type="checkbox" name="selected" value="{{ m.id }}" checked
+                               class="w-4 h-4 text-blue-600 rounded">
+                    </td>
+                    <td class="px-3 py-2 font-mono text-xs">{{ m.id }}</td>
+                    <td class="px-3 py-2">{{ m.name }}</td>
+                    <td class="px-3 py-2">{{ m.context }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- 保留 -->
+    {% if kept %}
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+        <h3 class="font-medium mb-3 text-blue-700">✅ 保留（{{ kept | length }}）</h3>
+        <p class="text-sm text-gray-500">这些模型两边都有，将被保留。</p>
+        <div class="mt-2 text-sm font-mono text-gray-600">
+            {{ kept | join(", ") }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 缺失（退休候选） -->
+    {% if missing %}
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+        <h3 class="font-medium mb-3 text-yellow-700">⚠️ 本地有端点无（{{ missing | length }}）</h3>
+        <p class="text-sm text-gray-500">这些模型将从配置移除并进入退休列表：</p>
+        <div class="mt-2 text-sm font-mono text-gray-600">
+            {{ missing | join(", ") }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 回归恢复 -->
+    {% if restored %}
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+        <h3 class="font-medium mb-3 text-green-700">🔄 回归恢复（{{ restored | length }}）</h3>
+        <p class="text-sm text-gray-500">这些模型重新出现在端点，将从退休列表恢复：</p>
+        <div class="mt-2 text-sm font-mono text-gray-600">
+            {{ restored | join(", ") }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 新退休 -->
+    {% if retired_now %}
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+        <h3 class="font-medium mb-3 text-orange-700">🚫 新退休（{{ retired_now | length }}）</h3>
+        <p class="text-sm text-gray-500">这些模型将进入退休宽限期（30 天）：</p>
+        <div class="mt-2 text-sm font-mono text-gray-600">
+            {{ retired_now | join(", ") }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 操作按钮 -->
+    <div class="flex gap-2">
+        {% if added or restored %}
+        <button type="submit"
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+            应用变更（{{ added | length + restored | length }} 个模型）
+        </button>
+        {% endif %}
+        <a href="/providers?selected={{ pid }}"
+           class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300 text-sm no-underline text-gray-700">
+            取消
+        </a>
+    </div>
+</form>
+{% endblock %}
