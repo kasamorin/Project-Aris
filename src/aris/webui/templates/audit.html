@@ -12,6 +12,25 @@
     </div>
 </div>
 
+<!-- 筛选栏 -->
+<form method="get" action="/audit" class="bg-white rounded-lg shadow p-4 mb-4 flex gap-4 items-end">
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">模块</label>
+        <input type="text" name="module" value="{{ module }}" placeholder="如 llm"
+               class="px-3 py-1 border border-gray-300 rounded text-sm w-32">
+    </div>
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">操作</label>
+        <input type="text" name="action" value="{{ action }}" placeholder="如 llm.stream"
+               class="px-3 py-1 border border-gray-300 rounded text-sm w-40">
+    </div>
+    <button type="submit" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">筛选</button>
+    <a href="/audit" class="px-3 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300 no-underline text-gray-700">重置</a>
+    <div class="ml-auto text-sm text-gray-500">
+        共 {{ total }} 条
+    </div>
+</form>
+
 <!-- 表格 -->
 <div class="bg-white rounded-lg shadow overflow-hidden">
     <table class="w-full text-sm">
@@ -50,6 +69,21 @@
     </table>
 </div>
 
+<!-- 分页 -->
+{% if total_pages > 1 %}
+<div class="flex justify-center gap-2 mt-4">
+    {% if page > 1 %}
+    <a href="/audit?page={{ page - 1 }}&module={{ module }}&action={{ action }}"
+       class="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50 no-underline text-gray-700">上一页</a>
+    {% endif %}
+    <span class="px-3 py-1 text-sm text-gray-500">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="/audit?page={{ page + 1 }}&module={{ module }}&action={{ action }}"
+       class="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50 no-underline text-gray-700">下一页</a>
+    {% endif %}
+</div>
+{% endif %}
+
 <script>
 let eventSource = null;
 
@@ -80,6 +114,10 @@ function toggleSSE() {
 
 function addAuditRow(data) {
     const tbody = document.getElementById('audit-body');
+    // 移除空提示
+    if (tbody.children.length === 1 && tbody.children[0].children.length === 1) {
+        tbody.innerHTML = '';
+    }
     const tr = document.createElement('tr');
     tr.className = 'border-t border-gray-100 bg-blue-50';
     tr.innerHTML = `
@@ -89,7 +127,6 @@ function addAuditRow(data) {
         <td class="px-4 py-2">${data.ok ? '<span class="text-green-600">✓</span>' : '<span class="text-red-600">✗</span>'}</td>
     `;
     tbody.insertBefore(tr, tbody.firstChild);
-    // 高亮闪烁后恢复
     setTimeout(() => tr.className = 'border-t border-gray-100', 2000);
 }
 </script>

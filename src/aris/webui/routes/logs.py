@@ -18,6 +18,7 @@ async def logs_page(
     request: Request,
     file: str | None = Query(None),
     date: str | None = Query(None),
+    page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     """日志查看页面。"""
     from ...config import get_settings
@@ -35,16 +36,29 @@ async def logs_page(
                 log_files.append({"name": f.name})
 
     log_content = ""
+    total_lines = 0
     if file and log_dir.exists():
         log_path = log_dir / file
         if log_path.exists():
-            log_content = log_path.read_text(encoding="utf-8", errors="replace")
+            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+            total_lines = len(lines)
+            # 分页：每页 200 行，显示最新的
+            page_size = 200
+            start = max(0, total_lines - page * page_size)
+            end = start + page_size
+            log_content = "\n".join(lines[start:end])
+
+    total_pages = max(1, (total_lines + 199) // 200) if total_lines else 1
 
     return render(request, "logs.html", {
         "active_page": "logs",
         "log_files": log_files,
         "current_file": file,
         "log_content": log_content,
+        "page": page,
+        "total_pages": total_pages,
+        "total_lines": total_lines,
+        "date": date,
     })
 
 

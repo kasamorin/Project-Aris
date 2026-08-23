@@ -33,6 +33,19 @@
         <div id="log-container" class="bg-gray-900 rounded-lg shadow p-4 h-[600px] overflow-y-auto font-mono text-sm">
             <pre id="log-content" class="text-gray-300 whitespace-pre-wrap">{{ log_content }}</pre>
         </div>
+        {% if total_pages > 1 %}
+        <div class="flex justify-center gap-2 mt-4">
+            {% if page > 1 %}
+            <a href="/logs?file={{ current_file }}&date={{ date }}&page={{ page - 1 }}"
+               class="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50 no-underline text-gray-700">下一页（更早）</a>
+            {% endif %}
+            <span class="px-3 py-1 text-sm text-gray-500">{{ page }} / {{ total_pages }}（共 {{ total_lines }} 行）</span>
+            {% if page < total_pages %}
+            <a href="/logs?file={{ current_file }}&date={{ date }}&page={{ page + 1 }}"
+               class="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50 no-underline text-gray-700">上一页（更新）</a>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 </div>
 
