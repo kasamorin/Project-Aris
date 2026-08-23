@@ -91,11 +91,19 @@ def audit_push(target: str, duration: float, ok: bool = True, detail: str = "") 
     audit_broker.broadcast(event)
 
 
+# 防止重复安装
+_sink_installed = False
+
+
 def install_loguru_sink() -> None:
     """安装 loguru SSE sink（仅安装一次）。"""
+    global _sink_installed
+    if _sink_installed:
+        return
+    _sink_installed = True
     logger.add(
         loguru_log_sink,
         format="{message}",
-        level="INFO",
+        level="DEBUG",
         filter=lambda record: record["name"].startswith("aris"),
     )

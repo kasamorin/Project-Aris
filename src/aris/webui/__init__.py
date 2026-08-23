@@ -24,12 +24,16 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
 
-    # 鉴权中间件
-    app.add_middleware(AuthMiddleware)
-
-    # 安装 loguru SSE sink
+    # 安装 loguru SSE sink（必须在其他中间件之前）
     from .sse import install_loguru_sink
     install_loguru_sink()
+
+    # 请求日志中间件（通过 loguru 记录，SSE 可捕获）
+    from .middleware import RequestLoggingMiddleware
+    app.add_middleware(RequestLoggingMiddleware)
+
+    # 鉴权中间件
+    app.add_middleware(AuthMiddleware)
 
     # 静态资源（UnoCSS + marked.js）
     static_dir = Path(__file__).parent / "static"
