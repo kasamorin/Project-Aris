@@ -191,6 +191,7 @@
 </div>
 
 <!-- 添加模型弹窗 -->
+{% if provider %}
 <div id="add-model-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:50;">
     <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border-radius:8px; padding:24px; width:420px;">
         <h3 style="font-size:18px; font-weight:500; margin-bottom:16px;">添加模型到 {{ provider.name }}</h3>
@@ -219,6 +220,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <script>
 function showAddModal() {
