@@ -2,9 +2,9 @@
 {% block title %}提供商管理 - Project-Aris{% endblock %}
 {% block content %}
 <h2 class="text-2xl font-semibold mb-6">提供商管理</h2>
-<div class="grid grid-cols-3 gap-6">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- 左侧：提供方列表 -->
-    <div class="col-span-1">
+    <div class="col-span-1 lg:col-span-1">
         <div class="bg-white rounded-lg shadow">
             {% for p in providers %}
             <a href="/providers?selected={{ p.id }}"
@@ -20,7 +20,7 @@
         </div>
     </div>
     <!-- 右侧：详情 -->
-    <div class="col-span-2">
+    <div class="col-span-1 lg:col-span-2">
         {% set provider = providers | selectattr("id", "equalto", selected) | first %}
         {% if provider %}
         <div class="bg-white rounded-lg shadow">

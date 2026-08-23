@@ -6,7 +6,7 @@
 <!-- .env 状态（只读） -->
 <div class="bg-white rounded-lg shadow p-4 mb-6">
     <h3 class="font-medium mb-3">环境变量状态</h3>
-    <div class="grid grid-cols-3 gap-2 text-sm">
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
         {% for var in env_vars %}
         <div class="flex items-center gap-2">
             <span>{% if var.configured %}✅{% else %}❌{% endif %}</span>
@@ -17,9 +17,9 @@
 </div>
 
 <!-- 模块配置 -->
-<div class="grid grid-cols-4 gap-6">
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
     <!-- 左侧：模块列表 -->
-    <div class="col-span-1">
+    <div class="col-span-1 lg:col-span-1">
         <div class="bg-white rounded-lg shadow">
             {% for mod in modules %}
             <a href="/config?module={{ mod.name }}"
@@ -31,7 +31,7 @@
         </div>
     </div>
     <!-- 右侧：配置表单 -->
-    <div class="col-span-3">
+    <div class="col-span-1 lg:col-span-3">
         <div class="bg-white rounded-lg shadow p-4">
             {% if current_module %}
             <h3 class="font-medium mb-4">{{ current_module_label }}</h3>

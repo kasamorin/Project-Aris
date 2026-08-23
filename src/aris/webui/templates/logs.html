@@ -12,9 +12,9 @@
     </div>
 </div>
 
-<div class="grid grid-cols-4 gap-6">
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
     <!-- 左侧：日期 + 文件列表 -->
-    <div class="col-span-1">
+    <div class="col-span-1 lg:col-span-1">
         <div class="bg-white rounded-lg shadow">
             <div class="p-3 border-b border-gray-200">
                 <input type="date" class="w-full px-2 py-1 border border-gray-300 rounded text-sm">
@@ -29,7 +29,7 @@
         </div>
     </div>
     <!-- 右侧：日志内容 -->
-    <div class="col-span-3">
+    <div class="col-span-1 lg:col-span-3">
         <div id="log-container" class="bg-gray-900 rounded-lg shadow p-4 h-[600px] overflow-y-auto font-mono text-sm">
             <pre id="log-content" class="text-gray-300 whitespace-pre-wrap">{{ log_content }}</pre>
         </div>
@@ -40,28 +40,40 @@
 let logEventSource = null;
 
 function toggleLogSSE() {
+    if (logEventSource) {
+        disconnectLogSSE();
+    } else {
+        connectLogSSE();
+    }
+}
+
+function connectLogSSE() {
+    const btn = document.getElementById('log-sse-toggle');
+    const status = document.getElementById('log-sse-status');
+    logEventSource = new EventSource('/logs/stream');
+    btn.textContent = '⏸ 暂停';
+    status.textContent = '已连接';
+    status.className = 'text-xs text-green-600';
+    logEventSource.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        addLogLine(data);
+    };
+    logEventSource.onerror = function() {
+        status.textContent = '连接断开';
+        status.className = 'text-xs text-red-600';
+    };
+}
+
+function disconnectLogSSE() {
     const btn = document.getElementById('log-sse-toggle');
     const status = document.getElementById('log-sse-status');
     if (logEventSource) {
         logEventSource.close();
         logEventSource = null;
-        btn.textContent = '▶ 实时';
-        status.textContent = '未连接';
-        status.className = 'text-xs text-gray-400';
-    } else {
-        logEventSource = new EventSource('/logs/stream');
-        btn.textContent = '⏸ 暂停';
-        status.textContent = '已连接';
-        status.className = 'text-xs text-green-600';
-        logEventSource.onmessage = function(e) {
-            const data = JSON.parse(e.data);
-            addLogLine(data);
-        };
-        logEventSource.onerror = function() {
-            status.textContent = '连接断开';
-            status.className = 'text-xs text-red-600';
-        };
     }
+    btn.textContent = '▶ 实时';
+    status.textContent = '未连接';
+    status.className = 'text-xs text-gray-400';
 }
 
 function addLogLine(data) {
@@ -78,8 +90,12 @@ function addLogLine(data) {
     line.className = color;
     line.textContent = `${data.ts} | ${data.level.padEnd(8)} | ${data.module} - ${data.message}\n`;
     pre.appendChild(line);
-    // 自动滚动到底部
     container.scrollTop = container.scrollHeight;
 }
+
+// 页面加载后自动连接 SSE
+window.addEventListener('load', function() {
+    connectLogSSE();
+});
 </script>
 {% endblock %}
