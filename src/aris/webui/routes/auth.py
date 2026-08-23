@@ -66,7 +66,7 @@ async def login_submit(
     # 登录成功
     login_limiter.reset(client_ip)
     cookie_value, max_age = create_session_cookie()
-    response = RedirectResponse(url="/", status_code=302)
+    response = RedirectResponse(url="/", status_code=303)  # 303 改为 GET
     response.set_cookie(
         "aris_session",
         cookie_value,
