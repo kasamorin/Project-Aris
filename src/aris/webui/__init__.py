@@ -27,6 +27,10 @@ def create_app() -> FastAPI:
     # 鉴权中间件
     app.add_middleware(AuthMiddleware)
 
+    # 安装 loguru SSE sink
+    from .sse import install_loguru_sink
+    install_loguru_sink()
+
     # 静态资源（UnoCSS + marked.js）
     static_dir = Path(__file__).parent / "static"
     static_dir.mkdir(exist_ok=True)

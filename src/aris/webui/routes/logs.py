@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 from ..templates import render
 
@@ -45,3 +46,34 @@ async def logs_page(
         "current_file": file,
         "log_content": log_content,
     })
+
+
+@router.get("/logs/stream")
+async def logs_stream(request: Request) -> StreamingResponse:
+    """日志实时流 SSE 端点。"""
+    from ..sse import log_broker
+
+    queue = log_broker.subscribe()
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = queue.get_nowait()
+                    yield event
+                except Exception:
+                    await asyncio.sleep(0.5)
+        finally:
+            log_broker.unsubscribe(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

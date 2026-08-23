@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..templates import render
 
@@ -69,10 +69,67 @@ def _load_skill_detail(name: str) -> dict | None:
     content = ""
     if skill_md.exists():
         content = skill_md.read_text(encoding="utf-8")
-    # 检查是否有 tools.py
     has_tools = (skill_dir / "tools.py").exists()
     return {
         "name": name,
         "content": content,
         "has_tools": has_tools,
     }
+
+
+@router.post("/skills/create", response_model=None)
+async def skill_create(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(""),
+) -> RedirectResponse:
+    """创建新技能。"""
+    import re
+    # 校验名称（仅允许英文、数字、连字符）
+    if not re.match(r"^[a-z0-9-]+$", name):
+        return RedirectResponse(url="/skills?error=名称格式错误", status_code=303)
+    skill_dir = SKILLS_DIR / name
+    if skill_dir.exists():
+        return RedirectResponse(url=f"/skills?error={name} 已存在", status_code=303)
+    skill_dir.mkdir(parents=True)
+    skill_md = skill_dir / "SKILL.md"
+    content = f"# {name}\n\n{description}\n" if description else f"# {name}\n"
+    skill_md.write_text(content, encoding="utf-8")
+    return RedirectResponse(url=f"/skills/{name}", status_code=303)
+
+
+@router.get("/skills/{name}/edit", response_class=HTMLResponse)
+async def skill_edit_page(request: Request, name: str) -> HTMLResponse:
+    """技能编辑页面。"""
+    skill = _load_skill_detail(name)
+    if skill is None:
+        return RedirectResponse(url="/skills", status_code=303)
+    return render(request, "skill_edit.html", {
+        "active_page": "skills",
+        "skill": skill,
+    })
+
+
+@router.post("/skills/{name}/edit", response_model=None)
+async def skill_edit_save(
+    request: Request,
+    name: str,
+    content: str = Form(...),
+) -> RedirectResponse:
+    """保存技能编辑。"""
+    skill_dir = SKILLS_DIR / name
+    if not skill_dir.exists():
+        return RedirectResponse(url="/skills", status_code=303)
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text(content, encoding="utf-8")
+    return RedirectResponse(url=f"/skills/{name}", status_code=303)
+
+
+@router.post("/skills/{name}/delete", response_model=None)
+async def skill_delete(name: str) -> RedirectResponse:
+    """删除技能。"""
+    import shutil
+    skill_dir = SKILLS_DIR / name
+    if skill_dir.exists():
+        shutil.rmtree(skill_dir)
+    return RedirectResponse(url="/skills", status_code=303)

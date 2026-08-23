@@ -85,16 +85,18 @@ async def config_page(
     })
 
 
-@router.post("/config/save")
+@router.post("/config/save", response_model=None)
 async def config_save(
+    request: Request,
     module: str = Form(...),
 ) -> RedirectResponse:
     """保存模块配置。"""
-    from starlette.requests import Request  # noqa: F811
     # 备份旧配置
     _backup_config(module)
-    # TODO: 读取表单数据并写回 toml
-    return RedirectResponse(url=f"/config?module={module}", status_code=302)
+    # 读取表单数据并写回 toml
+    form_data = await request.form()
+    _save_module_config(module, dict(form_data))
+    return RedirectResponse(url=f"/config?module={module}", status_code=303)
 
 
 def _check_env_vars() -> list[dict]:
@@ -144,3 +146,60 @@ def _backup_config(module: str) -> None:
     ts = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     dst = backup_dir / f"{module}-{ts}.toml"
     shutil.copy2(src, dst)
+
+
+def _save_module_config(module: str, form_data: dict) -> None:
+    """把表单数据写回 toml 文件。"""
+    from ...cfgtoml import config_dir
+    toml_path = config_dir() / f"{module}.toml"
+
+    # 读取现有配置
+    existing = {}
+    if toml_path.exists():
+        with open(toml_path, "rb") as f:
+            existing = tomllib.load(f)
+
+    # 更新字段
+    for key, value in form_data.items():
+        if key == "module":
+            continue
+        # 尝试转换类型
+        existing[key] = _convert_toml_value(value)
+
+    # 写回 toml
+    _write_toml(toml_path, existing)
+
+
+def _convert_toml_value(value: str) -> str | int | float | bool:
+    """尝试把字符串转换为合适的 TOML 类型。"""
+    if not isinstance(value, str):
+        return value
+    # bool
+    if value.lower() in ("true", "false"):
+        return value.lower() == "true"
+    # int
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    # float
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
+
+
+def _write_toml(path: Path, data: dict) -> None:
+    """简单的 TOML 写入（不依赖 toml 库）。"""
+    lines: list[str] = []
+    for key, value in data.items():
+        if isinstance(value, str):
+            lines.append(f'{key} = "{value}"')
+        elif isinstance(value, bool):
+            lines.append(f'{key} = {str(value).lower()}')
+        elif isinstance(value, (int, float)):
+            lines.append(f'{key} = {value}')
+        else:
+            lines.append(f'{key} = "{value}"')
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 from ..templates import render
 
@@ -53,3 +55,34 @@ def _query_records(
     except Exception:
         pass
     return []
+
+
+@router.get("/audit/stream")
+async def audit_stream(request: Request) -> StreamingResponse:
+    """审计实时流 SSE 端点。"""
+    from ..sse import audit_broker
+
+    queue = audit_broker.subscribe()
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = queue.get_nowait()
+                    yield event
+                except Exception:
+                    await asyncio.sleep(0.5)
+        finally:
+            audit_broker.unsubscribe(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

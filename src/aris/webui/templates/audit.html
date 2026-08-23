@@ -3,20 +3,13 @@
 {% block content %}
 <div class="flex justify-between items-center mb-6">
     <h2 class="text-2xl font-semibold">审计流水</h2>
-    <button id="sse-toggle" class="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300">
-        ▶ 实时
-    </button>
-</div>
-
-<!-- 筛选栏 -->
-<div class="bg-white rounded-lg shadow p-4 mb-4 flex gap-4">
-    <input type="date" class="px-3 py-1 border border-gray-300 rounded text-sm">
-    <select class="px-3 py-1 border border-gray-300 rounded text-sm">
-        <option value="">全部模块</option>
-    </select>
-    <select class="px-3 py-1 border border-gray-300 rounded text-sm">
-        <option value="">全部操作</option>
-    </select>
+    <div class="flex items-center gap-2">
+        <span id="sse-status" class="text-xs text-gray-400">未连接</span>
+        <button id="sse-toggle" onclick="toggleSSE()"
+                class="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300">
+            ▶ 实时
+        </button>
+    </div>
 </div>
 
 <!-- 表格 -->
@@ -25,18 +18,17 @@
         <thead class="bg-gray-50">
             <tr>
                 <th class="px-4 py-2 text-left">时间</th>
-                <th class="px-4 py-2 text-left">模块</th>
-                <th class="px-4 py-2 text-left">操作</th>
+                <th class="px-4 py-2 text-left">目标</th>
+                <th class="px-4 py-2 text-left">耗时</th>
                 <th class="px-4 py-2 text-left">结果</th>
-                <th class="px-4 py-2 text-left">详情</th>
             </tr>
         </thead>
         <tbody id="audit-body">
             {% for row in records %}
             <tr class="border-t border-gray-100">
-                <td class="px-4 py-2 text-gray-500">{{ row.ts }}</td>
-                <td class="px-4 py-2">{{ row.module }}</td>
-                <td class="px-4 py-2">{{ row.action }}</td>
+                <td class="px-4 py-2 text-gray-500 text-xs">{{ row.ts }}</td>
+                <td class="px-4 py-2 font-mono text-xs">{{ row.action }}</td>
+                <td class="px-4 py-2 text-xs">{{ row.detail }}</td>
                 <td class="px-4 py-2">
                     {% if row.result == 'success' %}
                     <span class="text-green-600">✓</span>
@@ -44,10 +36,53 @@
                     <span class="text-red-600">✗</span>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-gray-500">{{ row.detail }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+
+<script>
+let eventSource = null;
+
+function toggleSSE() {
+    const btn = document.getElementById('sse-toggle');
+    const status = document.getElementById('sse-status');
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+        btn.textContent = '▶ 实时';
+        status.textContent = '未连接';
+        status.className = 'text-xs text-gray-400';
+    } else {
+        eventSource = new EventSource('/audit/stream');
+        btn.textContent = '⏸ 暂停';
+        status.textContent = '已连接';
+        status.className = 'text-xs text-green-600';
+        eventSource.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            addAuditRow(data);
+        };
+        eventSource.onerror = function() {
+            status.textContent = '连接断开';
+            status.className = 'text-xs text-red-600';
+        };
+    }
+}
+
+function addAuditRow(data) {
+    const tbody = document.getElementById('audit-body');
+    const tr = document.createElement('tr');
+    tr.className = 'border-t border-gray-100 bg-blue-50';
+    tr.innerHTML = `
+        <td class="px-4 py-2 text-gray-500 text-xs">${data.ts}</td>
+        <td class="px-4 py-2 font-mono text-xs">${data.target}</td>
+        <td class="px-4 py-2 text-xs">${data.duration_ms}ms</td>
+        <td class="px-4 py-2">${data.ok ? '<span class="text-green-600">✓</span>' : '<span class="text-red-600">✗</span>'}</td>
+    `;
+    tbody.insertBefore(tr, tbody.firstChild);
+    // 高亮闪烁后恢复
+    setTimeout(() => tr.className = 'border-t border-gray-100', 2000);
+}
+</script>
 {% endblock %}

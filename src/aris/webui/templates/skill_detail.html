@@ -35,8 +35,8 @@
 <script>
 function deleteSkill(name) {
     if (confirm('确定要删除技能 "' + name + '" 吗？此操作不可撤销。')) {
-        // TODO: 实现删除逻辑
-        alert('删除功能待实现');
+        fetch('/skills/' + name + '/delete', { method: 'POST' })
+            .then(() => window.location.href = '/skills');
     }
 }
 </script>
