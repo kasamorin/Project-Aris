@@ -81,11 +81,15 @@ class AgentLoop:
         registry: ToolRegistry,
         model_id: str,
         max_rounds: int | None = None,
+        temperature: float | None = None,  # 采样温度（config/chat.toml）
+        top_p: float | None = None,  # 核采样概率质量（config/chat.toml）
     ) -> None:
         self.engine = engine
         self.registry = registry
         self.model_id = model_id
         self.max_rounds = _loop_config.max_rounds if max_rounds is None else max_rounds
+        self.temperature = temperature
+        self.top_p = top_p  # 传入 ChatRequest，由 formatters 写入请求体
         # 注册为统一服务：agent loop 统一走 core.call("loop.run", ...)
         provide("loop.run", self.iter_events)
         provide("loop.set_model", self.set_model)
@@ -117,6 +121,8 @@ class AgentLoop:
                 messages=work,
                 tools=tools,
                 thinking=thinking,
+                temperature=self.temperature,
+                top_p=self.top_p,
             )
             if race_model is not None and race_model != self.model_id:
                 fallback_request = ChatRequest(
@@ -124,6 +130,8 @@ class AgentLoop:
                     messages=work,
                     tools=tools,
                     thinking=thinking,
+                    temperature=self.temperature,
+                    top_p=self.top_p,
                 )
                 deltas = call("llm.race", base_request, fallback_request)
             else:

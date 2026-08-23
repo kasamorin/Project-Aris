@@ -93,6 +93,7 @@ class ChatRequest:
     format: str = ApiFormat.CHAT
     stream: bool = True
     temperature: float | None = None
+    top_p: float | None = None
     max_tokens: int | None = None
     tools: list[ToolDefinition] | None = None
     tool_choice: str | dict | None = None

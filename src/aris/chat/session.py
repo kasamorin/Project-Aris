@@ -51,6 +51,9 @@ def _default_system_prompt() -> str:
 class ChatConfig:
     """chat 模块可调参数（config/chat.toml）。"""
 
+    # LLM 采样参数：None = 不传（由提供方决定默认值）
+    temperature: float | None = None  # 采样温度，0=确定性，1=随机性较高
+    top_p: float | None = None  # 核采样概率质量，0.9=从前 90% token 采样
     log_rotation_bytes: int = 10 * 1024 * 1024
     tool_result_preview_len: int = 60
 
@@ -138,7 +141,9 @@ class ChatSession:
         self._system_prompt = system_prompt
         self.history: list[Message] = [Message(role=MessageRole.SYSTEM, content=system_prompt)]
         self._loop = AgentLoop(
-            engine, registry=self.registry, model_id=model_id
+            engine, registry=self.registry, model_id=model_id,
+            temperature=_chat_config.temperature,
+            top_p=_chat_config.top_p,
         )
         # 降级恢复状态：降级后记住实际生效的模型，下一轮竞速回主模型
         self._degraded_model: str | None = None

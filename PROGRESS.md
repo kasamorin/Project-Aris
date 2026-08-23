@@ -1,6 +1,6 @@
 # 开发进度报告
 
-更新于：2026-08-18（Arch Linux 会话）
+更新于：2026-08-22（Arch Linux 会话）
 
 ## 已完成
 
@@ -238,6 +238,16 @@
   候选 Gemini API Grounding（每日免费额度）或有头模式过反爬，实现前再定
 - ~~persona 实现方式~~（已定：提示词工程起步，2026-08-12，见 AGENTS.md）
 
+## 已完成（补充）
+
+- **WebUI 设计定稿 v2（2026-08-22）**：管理后台设计方案完成，详
+  `developDoc/WEBUI.md`。定位运维管理后台（不做网页对话），技术栈
+  FastAPI + Jinja2 + htmx + UnoCSS CDN + SSE，6 页 MVP，
+  默认绑定 `0.0.0.0:9690`（跨设备可达，鉴权密码必设）。
+  本次会话完成设计审查：识别 8 项实现前置决策（对话历史格式、
+  Markdown 渲染方式、SSE 鉴权、Cookie 安全属性、登录限流、
+  健康状态来源、CLI/toml 优先级、plugins 模板）。
+
 ## 已知问题（待修）
 
 - **运行 `aris chat` 偶发 Node.js EPIPE 崩溃（2026-08-09，已解决）**：报错
@@ -271,13 +281,9 @@
 
 ## 下一步
 
-1. LLM 提供商与模型管理（**阶段二，已完成** 2026-08-14）：`aris llm fetch`
-   一体式（/models 拉取 + models.dev enrichment + 白名单勾选 UI + 写回）+
-   退休机制（`config/retired_models.toml` 宽限期 30 天 + `aris llm retired`
-   删除 TUI）已实现并验证，详 `developDoc/LLM-PROVIDER-MGMT.md`。
-   真机验证已完成（2026-08-16，见已完成条目）。后续：决定是否把真实端点
-   62 个模型全量同步进配置并挑选默认模型（当前默认仍 deepseek-v4-flash-free，
-   端点限流 429 时可用本地 mock 测试链路）
+1. **WebUI 管理后台（当前聚焦）**：设计定稿 v2（2026-08-22），实现待启动。
+   前置决策审查已完成（8 项待定见 `developDoc/WEBUI.md`），须在编码前逐一定案。
+   技术栈：FastAPI + Jinja2 + htmx + UnoCSS CDN + SSE，6 页 MVP。
 2. 行为扩展续：下一个能力类 skill（知识库 / 日记 / 接入 AstrBook 论坛，见项目待办清单）
 3. 记忆系统（PostgreSQL + pgvector）→ 人格世界观/关系网演进
 4. 语音链路（STT → LLM → TTS）
