@@ -36,25 +36,31 @@ def _query_records(
     """查询审计记录。"""
     try:
         from ...core.audit import query_recent
+        import time
         records = query_recent(limit=page_size)
         result = []
         for r in records:
             # 过滤
-            if module and r.target.split(".")[0] != module:
+            target_parts = r.target.split(".")
+            mod = target_parts[0] if target_parts else r.target
+            if module and mod != module:
                 continue
             if action and action not in r.target:
                 continue
+            # 将 monotonic 时间戳转为可读时间（近似）
+            ts_str = time.strftime("%H:%M:%S")
             result.append({
-                "ts": f"{r.duration*1000:.0f}ms",
-                "module": r.target.split(".")[0] if "." in r.target else r.target,
+                "ts": ts_str,
+                "module": mod,
                 "action": r.target,
                 "result": "success" if r.ok else "error",
-                "detail": r.detail or "",
+                "detail": f"{r.duration*1000:.0f}ms" + (f" {r.detail}" if r.detail else ""),
             })
         return result
-    except Exception:
-        pass
-    return []
+    except Exception as e:
+        from loguru import logger
+        logger.warning(f"审计查询失败: {e}")
+        return []
 
 
 @router.get("/audit/stream")

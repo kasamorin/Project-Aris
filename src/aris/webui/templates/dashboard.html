@@ -7,44 +7,48 @@
 <div class="grid grid-cols-4 gap-4 mb-8">
     <div class="bg-white rounded-lg shadow p-4">
         <div class="text-sm text-gray-500">今日对话数</div>
-        <div class="text-2xl font-bold">{{ stats.chat_count | default(0) }}</div>
+        <div class="text-3xl font-bold mt-1">{{ stats.chat_count }}</div>
     </div>
     <div class="bg-white rounded-lg shadow p-4">
         <div class="text-sm text-gray-500">提供商状态</div>
-        <div class="text-2xl font-bold">
-            {% if stats.providers_healthy %}✅{% else %}⚠️{% endif %}
+        <div class="text-3xl font-bold mt-1">
+            {% if stats.providers_healthy %}
+            <span class="text-green-600">正常</span>
+            {% else %}
+            <span class="text-yellow-600">异常</span>
+            {% endif %}
         </div>
     </div>
     <div class="bg-white rounded-lg shadow p-4">
         <div class="text-sm text-gray-500">活跃技能</div>
-        <div class="text-2xl font-bold">{{ stats.skills_count | default(0) }}</div>
+        <div class="text-3xl font-bold mt-1">{{ stats.skills_count }}</div>
     </div>
     <div class="bg-white rounded-lg shadow p-4">
         <div class="text-sm text-gray-500">审计条目</div>
-        <div class="text-2xl font-bold">{{ stats.audit_count | default(0) }}</div>
+        <div class="text-3xl font-bold mt-1">{{ stats.audit_count }}</div>
     </div>
 </div>
 
 <!-- 快捷入口 -->
 <h3 class="text-lg font-medium mb-4">快捷入口</h3>
 <div class="grid grid-cols-5 gap-4">
-    <a href="/providers" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center">
+    <a href="/providers" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center no-underline">
         <div class="text-2xl mb-2">🔌</div>
         <div class="text-sm">提供商管理</div>
     </a>
-    <a href="/audit" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center">
+    <a href="/audit" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center no-underline">
         <div class="text-2xl mb-2">📋</div>
         <div class="text-sm">审计流水</div>
     </a>
-    <a href="/skills" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center">
+    <a href="/skills" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center no-underline">
         <div class="text-2xl mb-2">🧩</div>
         <div class="text-sm">技能管理</div>
     </a>
-    <a href="/config" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center">
+    <a href="/config" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center no-underline">
         <div class="text-2xl mb-2">⚙️</div>
         <div class="text-sm">配置管理</div>
     </a>
-    <a href="/logs" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center">
+    <a href="/logs" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow text-center no-underline">
         <div class="text-2xl mb-2">📄</div>
         <div class="text-sm">日志查看</div>
     </a>

@@ -22,13 +22,14 @@ async def dashboard(request: Request) -> HTMLResponse:
 
 def _gather_stats() -> dict:
     """收集仪表盘统计数据。"""
+    import datetime
+    import os
     from pathlib import Path
     from ...config import get_settings
 
     settings = get_settings()
-    today = Path(__file__).now().strftime("%Y-%m-%d") if False else ""
-    # 简单实现：统计今日对话文件数
-    import datetime
+
+    # 今日对话数（统计 jsonl 文件）
     today = datetime.date.today().isoformat()
     log_dir = settings.data_dir / "logs" / today
     chat_count = 0
@@ -47,17 +48,25 @@ def _gather_stats() -> dict:
 
     # 技能数
     skills_count = 0
+    skills_dir = Path("skills")
+    if skills_dir.exists():
+        skills_count = len([d for d in skills_dir.iterdir() if d.is_dir()])
+
+    # 提供商健康状态
+    providers_healthy = True
     try:
-        from pathlib import Path as P
-        skills_dir = P("skills")
-        if skills_dir.exists():
-            skills_count = len([d for d in skills_dir.iterdir() if d.is_dir()])
+        from ...core.llm import load_providers
+        providers = load_providers(settings.llm_providers_file)
+        for p in providers.ordered_providers():
+            if not os.environ.get(p.api_key_env):
+                providers_healthy = False
+                break
     except Exception:
-        pass
+        providers_healthy = False
 
     return {
         "chat_count": chat_count,
-        "providers_healthy": True,  # 后续接入 check 逻辑
+        "providers_healthy": providers_healthy,
         "skills_count": skills_count,
         "audit_count": audit_count,
     }

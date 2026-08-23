@@ -24,6 +24,7 @@
             </tr>
         </thead>
         <tbody id="audit-body">
+            {% if records %}
             {% for row in records %}
             <tr class="border-t border-gray-100">
                 <td class="px-4 py-2 text-gray-500 text-xs">{{ row.ts }}</td>
@@ -38,6 +39,13 @@
                 </td>
             </tr>
             {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                    暂无审计记录
+                </td>
+            </tr>
+            {% endif %}
         </tbody>
     </table>
 </div>
