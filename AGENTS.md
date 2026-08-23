@@ -38,8 +38,10 @@
 
 ## 现状
 
-- 骨架 v0.1.0 完成（uv + src 布局、pydantic-settings 配置、loguru 日志、CLI、
-  模块占位、C 扩展 demo）；配置系统已定案并在 Arch 跑通 `uv sync`。
+- 当前版本 **v0.3.0**（2026-08-23）。
+- 骨架、LLM 接入、文字对话、行为扩展（函数调用）、联网搜索、人格系统均已完成。
+- WebUI 管理后台已完成（2026-08-23）：登录鉴权、仪表盘、审计、提供商管理、
+  技能管理、配置管理、日志查看。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -208,20 +210,19 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 开发路线
 
-> **当前聚焦：WebUI 管理后台**（设计定稿 v2，2026-08-22，实现待启动，
-> 详见 `developDoc/WEBUI.md`）。前置决策审查已完成，8 项待定已记录，
-> 编码前须逐一定案。
+> **当前聚焦：记忆系统**（PostgreSQL + pgvector）。WebUI 管理后台
+> 已完成（v0.3.0，2026-08-23），详见 `developDoc/WEBUI.md`。
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
 2. 接入 LLM —— **已完成**（2026-08-09，`core/llm`，见 PROGRESS.md）
 3. 跑通文字对话 —— **已完成**（2026-08-09，`aris chat`，见 PROGRESS.md）
-4. 记忆系统（PostgreSQL + pgvector）
+4. 记忆系统（PostgreSQL + pgvector）—— **下一步**
 5. 人格系统 —— **提示词工程起步，已完成简单版**（2026-08-12，`persona/`）；
    世界观/人际关系/成长轨迹后续演进
 6. 语音链路（STT → LLM → TTS）
 7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
-   MCP / Skills 待后续；联网搜索已完成（Tavily 唯一主链路 + web_open）
+   MCP / Skills 待后续；联网搜索已完成（Bing 直连 + Tavily 兜底）
 8. GraphRAG
 
 ## 已定案（直接照做，无需再确认）

@@ -1,6 +1,6 @@
 # Aris WebUI（管理后台）
 
-> **状态：设计定稿 v3（2026-08-23），实现待启动。** 定位为**内部管理后台**
+> **状态：v3 实现完成（2026-08-23）。** 定位为**内部管理后台**
 > （运维者用），**不做网页对话**（对话走语音为主 + 外部平台如 Matrix/Discord）。
 > TUI 定位为开发调试手段（见 AGENTS.md）。
 
@@ -45,13 +45,17 @@ src/aris/webui/
 ├── __init__.py        # create_app() 工厂
 ├── auth.py            # 密码登录 + 7 天 session cookie（HMAC 签名，零依赖）
 ├── rate_limit.py      # 登录限流（内存计数器）
+├── sse.py             # SSE 实时推送（loguru sink + 审计推送 + 客户端管理）
+├── middleware.py       # 请求日志中间件（通过 loguru 记录 HTTP 请求）
+├── templates.py       # Jinja2 模板渲染工具
 ├── routes/
-│   ├── dashboard.py   # 仪表盘（聚合统计 + 系统状态 + 快捷入口）
-│   ├── audit.py       # 审计流水（查询/筛选 + SSE 实时流）
+│   ├── auth.py        # 登录/登出
+│   ├── dashboard.py   # 仪表盘（聚合统计 + 快捷入口）
+│   ├── audit.py       # 审计流水（查询/筛选/分页 + SSE 实时流）
 │   ├── providers.py   # 提供商管理（增删 + fetch 审核 + 退休管理）
 │   ├── skills.py      # 技能管理（增删改 SKILL.md）
-│   ├── config.py      # 配置管理（查看/编辑 config/*.toml）
-│   ├── logs.py        # 日志查看（历史日志 + SSE 实时日志流）
+│   ├── config.py      # 配置管理（查看/编辑 config/*.toml + 备份）
+│   ├── logs.py        # 日志查看（历史日志/分页 + SSE 实时日志流）
 │   └── history.py     # 对话历史（占位页，后续实现）
 ├── templates/
 │   ├── base.html      # 基础骨架（导航栏 + head + footer）
@@ -59,7 +63,10 @@ src/aris/webui/
 │   ├── dashboard.html
 │   ├── audit.html
 │   ├── providers.html
+│   ├── fetch.html     # fetch 审核页面
 │   ├── skills.html
+│   ├── skill_detail.html
+│   ├── skill_edit.html
 │   ├── config.html
 │   ├── logs.html
 │   └── history.html   # 占位页
