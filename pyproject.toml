@@ -1,6 +1,6 @@
 [project]
 name = "aris"
-version = "0.2.6"
+version = "0.3.0"
 description = "拟人 AI Aris —— 目标是社会学意义上的人"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,6 +13,10 @@ dependencies = [
     "trafilatura>=2.0",
     "beautifulsoup4>=4.12",
     "tomli-w>=1.2.0",
+    "fastapi>=0.141.1",
+    "uvicorn>=0.52.4",
+    "jinja2>=3.1.6",
+    "python-multipart>=0.0.32",
 ]
 
 [project.scripts]

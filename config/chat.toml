@@ -1,6 +1,12 @@
 # chat 模块配置（agent loop / 会话 / 对话日志）
 # 缺省即用代码内默认值；本文件为完整可调项清单
 
+# --- LLM 采样参数（None=不传，由提供方决定）---
+# temperature：采样温度，0 = 确定性输出，1 = 随机性较高
+temperature = 0.7
+# top_p：核采样概率质量，0.9 = 从累积概率前 90% 的 token 中采样
+top_p = 0.9
+
 # agent loop 最多执行轮数（LLM↔工具循环，防死循环）
 max_rounds = 8
 

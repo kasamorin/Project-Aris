@@ -26,6 +26,9 @@
   持续演进的世界观、人际关系网和成长轨迹
 - 纯个人项目，但可维护性为最高优先级，目标运行数年
 - 开发节奏：先跑通核心链路（STT → LLM → TTS），再逐层叠加能力
+- **交互形态**：最终以**语音为主**（STT → LLM → TTS），文字为辅且不通过 TUI，
+  而是接入外部平台（Matrix / Discord 等）。TUI 定位为**开发调试手段**，
+  WebUI 定位为**运维管理后台**（非对话界面）
 - 详细蓝图见 `developDoc/Project-Aris.md`
 
 ## 开发环境
@@ -35,8 +38,10 @@
 
 ## 现状
 
-- 骨架 v0.1.0 完成（uv + src 布局、pydantic-settings 配置、loguru 日志、CLI、
-  模块占位、C 扩展 demo）；配置系统已定案并在 Arch 跑通 `uv sync`。
+- 当前版本 **v0.3.0**（2026-08-23）。
+- 骨架、LLM 接入、文字对话、行为扩展（函数调用）、联网搜索、人格系统均已完成。
+- WebUI 管理后台已完成（2026-08-23）：登录鉴权、仪表盘、审计、提供商管理、
+  技能管理、配置管理、日志查看。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -189,7 +194,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   目录化 skill，`SKILL.md` + 可选 `tools.py`；`SkillManager` 发现/菜单/激活，
   三层渐进式披露，详见 `developDoc/SKILLS.md`）；MCP 后续作为工具来源注册进 registry
 - `chat/` —— 文字对话（已实现）：`session.py`（会话逻辑）、`tui.py`（全屏界面）、
-  `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环
+  `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环。
+  **TUI 定位为开发调试手段**，项目成型后的主要对话界面是 WebUI（见 developDoc/WEBUI.md），
+  TUI 保留作为无 GUI 环境下的调试与快速验证入口
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
   届时再评估是否独立成模块
 
@@ -201,18 +208,21 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   （如 Message）；CLI 组装根可保持直接引用
 - 服务表与架构详见 `developDoc/BUS-ARCHITECTURE.md`
 
-## 开发路线（当前处于第一阶段）
+## 开发路线
+
+> **当前聚焦：记忆系统**（PostgreSQL + pgvector）。WebUI 管理后台
+> 已完成（v0.3.0，2026-08-23），详见 `developDoc/WEBUI.md`。
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
 2. 接入 LLM —— **已完成**（2026-08-09，`core/llm`，见 PROGRESS.md）
 3. 跑通文字对话 —— **已完成**（2026-08-09，`aris chat`，见 PROGRESS.md）
-4. 记忆系统（PostgreSQL + pgvector）
+4. 记忆系统（PostgreSQL + pgvector）—— **下一步**
 5. 人格系统 —— **提示词工程起步，已完成简单版**（2026-08-12，`persona/`）；
    世界观/人际关系/成长轨迹后续演进
 6. 语音链路（STT → LLM → TTS）
 7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
-   MCP / Skills 待后续；联网搜索已完成（Tavily 唯一主链路 + web_open）
+   MCP / Skills 待后续；联网搜索已完成（Bing 直连 + Tavily 兜底）
 8. GraphRAG
 
 ## 已定案（直接照做，无需再确认）

@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}提供商管理 - Project-Aris{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-semibold">提供商管理</h2>
+    <button onclick="showAddModal()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+        + 添加提供方
+    </button>
+</div>
+
+{% if error %}
+<div class="bg-red-50 text-red-700 text-sm p-3 rounded mb-4">{{ error }}</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- 左侧：提供方列表 -->
+    <div class="lg:col-span-1">
+        <div class="bg-white rounded-lg shadow">
+            {% for p in providers %}
+            <a href="/providers?selected={{ p.id }}&tab={{ tab }}"
+               class="block p-4 border-b border-gray-100 hover:bg-gray-50 no-underline
+                      {% if selected == p.id %}bg-blue-50{% endif %}">
+                <div class="font-medium">{{ p.name }}</div>
+                <div class="text-xs text-gray-500">
+                    {{ p.model_count }} 个模型 ·
+                    {% if p.key_ok %}✅ 密钥就位{% else %}❌ 缺密钥{% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- 右侧：详情 -->
+    <div class="lg:col-span-2">
+        {% set provider = providers | selectattr("id", "equalto", selected) | first %}
+        {% if provider %}
+        <div class="bg-white rounded-lg shadow">
+            <!-- 提供方信息 -->
+            <div class="p-4 border-b border-gray-200">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="font-medium text-lg">{{ provider.name }}</h3>
+                        <div class="text-sm text-gray-500 mt-1 font-mono">{{ provider.base_url }}</div>
+                        <div class="text-sm text-gray-500">
+                            密钥：{{ provider.key_env }}
+                            {% if provider.key_ok %}✅{% else %}❌{% endif %}
+                        </div>
+                    </div>
+                    <button onclick="deleteProvider('{{ provider.id }}', '{{ provider.name }}')"
+                            class="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200">
+                        删除
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab 切换 -->
+            <div class="flex border-b border-gray-200">
+                <a href="/providers?selected={{ provider.id }}&tab=models"
+                   class="px-4 py-2 text-sm {% if tab == 'models' %}border-b-2 border-blue-600 text-blue-600{% else %}text-gray-500{% endif %}">
+                    模型列表
+                </a>
+                <a href="/providers?selected={{ provider.id }}&tab=retired"
+                   class="px-4 py-2 text-sm {% if tab == 'retired' %}border-b-2 border-blue-600 text-blue-600{% else %}text-gray-500{% endif %}">
+                    退休管理
+                </a>
+            </div>
+
+            {% if tab == 'models' %}
+            <!-- 模型列表 -->
+            <div class="p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h4 class="font-medium">模型列表（{{ provider.models | length }}）</h4>
+                    <div class="flex gap-2">
+                        <a href="/providers/{{ provider.id }}/fetch"
+                           class="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 no-underline">
+                            🔄 同步模型
+                        </a>
+                        <button onclick="showAddModelModal()"
+                                class="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200">
+                            + 添加模型
+                        </button>
+                    </div>
+                </div>
+                {% if provider.models %}
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">ID</th>
+                            <th class="px-3 py-2 text-left">名称</th>
+                            <th class="px-3 py-2 text-left">上下文</th>
+                            <th class="px-3 py-2 text-left">能力</th>
+                            <th class="px-3 py-2 text-left">思考</th>
+                            <th class="px-3 py-2 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in provider.models %}
+                        <tr class="border-t border-gray-100 hover:bg-gray-50">
+                            <td class="px-3 py-2 font-mono text-xs">{{ m.id }}</td>
+                            <td class="px-3 py-2">{{ m.name }}</td>
+                            <td class="px-3 py-2">{{ m.context }}</td>
+                            <td class="px-3 py-2 text-xs">{{ m.capabilities }}</td>
+                            <td class="px-3 py-2 text-xs">{{ m.thinking_default }}</td>
+                            <td class="px-3 py-2">
+                                <button onclick="deleteModel('{{ provider.id }}', '{{ m.id }}')"
+                                        class="text-red-500 hover:text-red-700 text-xs">删除</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-gray-400 text-sm">暂无模型</p>
+                {% endif %}
+            </div>
+            {% else %}
+            <!-- 退休管理 -->
+            <div class="p-4">
+                <h4 class="font-medium mb-3">退休模型</h4>
+                {% if retired %}
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">模型</th>
+                            <th class="px-3 py-2 text-left">提供方</th>
+                            <th class="px-3 py-2 text-left">首次缺失</th>
+                            <th class="px-3 py-2 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in retired %}
+                        <tr class="border-t border-gray-100">
+                            <td class="px-3 py-2 font-mono text-xs">{{ r.model }}</td>
+                            <td class="px-3 py-2">{{ r.provider }}</td>
+                            <td class="px-3 py-2 text-xs">{{ r.first_missing }}</td>
+                            <td class="px-3 py-2">
+                                <button onclick="deleteRetired('{{ r.model }}')"
+                                        class="text-red-500 hover:text-red-700 text-xs">删除</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-gray-400 text-sm">暂无退休模型</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-lg shadow p-4">
+            <p class="text-gray-400">选择左侧提供方查看详情</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 添加提供方弹窗 -->
+<div id="add-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:50;">
+    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border-radius:8px; padding:24px; width:420px;">
+        <h3 style="font-size:18px; font-weight:500; margin-bottom:16px;">添加新提供方</h3>
+        <form method="post" action="/providers/add">
+            <div style="margin-bottom:12px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">ID（英文，如 openai）</label>
+                <input type="text" name="id" required pattern="[a-z0-9-]+"
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px;">
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">名称</label>
+                <input type="text" name="name"
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px;">
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">Base URL</label>
+                <input type="text" name="base_url" required placeholder="https://api.openai.com/v1"
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px;">
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">API Key 环境变量</label>
+                <input type="text" name="api_key_env" placeholder="OPENAI_API_KEY"
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px;">
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button type="button" onclick="hideAddModal()"
+                        style="padding:6px 12px; font-size:14px; background:#e5e7eb; border-radius:4px; border:none; cursor:pointer;">取消</button>
+                <button type="submit"
+                        style="padding:6px 12px; font-size:14px; background:#2563eb; color:white; border-radius:4px; border:none; cursor:pointer;">添加</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 添加模型弹窗 -->
+{% if provider %}
+<div id="add-model-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:50;">
+    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border-radius:8px; padding:24px; width:420px;">
+        <h3 style="font-size:18px; font-weight:500; margin-bottom:16px;">添加模型到 {{ provider.name }}</h3>
+        <form method="post" action="/providers/{{ provider.id }}/add-model">
+            <div style="margin-bottom:12px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">模型 ID</label>
+                <input type="text" name="model_id" required
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px;">
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">模型名称</label>
+                <input type="text" name="model_name"
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px;">
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">上下文长度</label>
+                <input type="number" name="context_length" value="0"
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px;">
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button type="button" onclick="hideAddModelModal()"
+                        style="padding:6px 12px; font-size:14px; background:#e5e7eb; border-radius:4px; border:none; cursor:pointer;">取消</button>
+                <button type="submit"
+                        style="padding:6px 12px; font-size:14px; background:#2563eb; color:white; border-radius:4px; border:none; cursor:pointer;">添加</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function showAddModal() {
+    document.getElementById('add-modal').style.display = 'block';
+}
+function hideAddModal() {
+    document.getElementById('add-modal').style.display = 'none';
+}
+function showAddModelModal() {
+    document.getElementById('add-model-modal').style.display = 'block';
+}
+function hideAddModelModal() {
+    document.getElementById('add-model-modal').style.display = 'none';
+}
+function deleteProvider(id, name) {
+    if (confirm('确定要删除提供方 "' + name + '" 吗？')) {
+        fetch('/providers/' + id + '/delete', { method: 'POST' })
+            .then(() => window.location.href = '/providers');
+    }
+}
+function deleteModel(pid, mid) {
+    if (confirm('确定要删除模型 "' + mid + '" 吗？')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/providers/' + pid + '/delete-model';
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'model_id';
+        input.value = mid;
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+function deleteRetired(model) {
+    if (confirm('确定要删除退休记录 "' + model + '" 吗？')) {
+        fetch('/providers/retired/' + encodeURIComponent(model) + '/delete', { method: 'POST' })
+            .then(() => window.location.href = '/providers?tab=retired');
+    }
+}
+</script>
+{% endblock %}

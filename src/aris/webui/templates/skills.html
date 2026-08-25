@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}技能管理 - Project-Aris{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-semibold">技能管理</h2>
+    <button onclick="showCreateModal()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+        + 创建技能
+    </button>
+</div>
+
+{% if error %}
+<div class="bg-red-50 text-red-700 text-sm p-3 rounded mb-4">{{ error }}</div>
+{% endif %}
+
+{% if skills %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for skill in skills %}
+    <a href="/skills/{{ skill.name }}" class="block bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow no-underline text-gray-900">
+        <h3 class="font-medium mb-1">{{ skill.name }}</h3>
+        <p class="text-sm text-gray-500">{{ skill.description or '（无描述）' }}</p>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="bg-white rounded-lg shadow p-8 text-center">
+    <p class="text-gray-400">暂无技能</p>
+    <p class="text-sm text-gray-400 mt-2">点击上方「+ 创建技能」添加新技能</p>
+</div>
+{% endif %}
+
+<!-- 创建技能弹窗 -->
+<div id="create-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:50;">
+    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border-radius:8px; padding:24px; width:384px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+        <h3 style="font-size:18px; font-weight:500; margin-bottom:16px;">创建新技能</h3>
+        <form method="post" action="/skills/create">
+            <div style="margin-bottom:12px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">名称（英文，如 web-search）</label>
+                <input type="text" name="name" required pattern="[a-z0-9-]+"
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px; font-size:14px;">
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-size:14px; color:#666; margin-bottom:4px;">描述</label>
+                <input type="text" name="description"
+                       style="width:100%; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px; font-size:14px;">
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button type="button" onclick="hideCreateModal()"
+                        style="padding:6px 12px; font-size:14px; background:#e5e7eb; border-radius:4px; border:none; cursor:pointer;">取消</button>
+                <button type="submit"
+                        style="padding:6px 12px; font-size:14px; background:#2563eb; color:white; border-radius:4px; border:none; cursor:pointer;">创建</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function showCreateModal() {
+    document.getElementById('create-modal').style.display = 'block';
+}
+function hideCreateModal() {
+    document.getElementById('create-modal').style.display = 'none';
+}
+</script>
+{% endblock %}

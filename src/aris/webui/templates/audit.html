@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}审计流水 - Project-Aris{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-semibold">审计流水</h2>
+    <div class="flex items-center gap-2">
+        <span id="sse-status" class="text-xs text-gray-400">未连接</span>
+        <button id="sse-toggle" onclick="toggleSSE()"
+                class="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300">
+            ▶ 实时
+        </button>
+    </div>
+</div>
+
+<!-- 筛选栏 -->
+<form method="get" action="/audit" class="bg-white rounded-lg shadow p-4 mb-4 flex gap-4 items-end">
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">模块</label>
+        <input type="text" name="module" value="{{ module }}" placeholder="如 llm"
+               class="px-3 py-1 border border-gray-300 rounded text-sm w-32">
+    </div>
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">操作</label>
+        <input type="text" name="action" value="{{ action }}" placeholder="如 llm.stream"
+               class="px-3 py-1 border border-gray-300 rounded text-sm w-40">
+    </div>
+    <button type="submit" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">筛选</button>
+    <a href="/audit" class="px-3 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300 no-underline text-gray-700">重置</a>
+    <div class="ml-auto text-sm text-gray-500">
+        共 {{ total }} 条
+    </div>
+</form>
+
+<!-- 表格 -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-4 py-2 text-left">时间</th>
+                <th class="px-4 py-2 text-left">目标</th>
+                <th class="px-4 py-2 text-left">耗时</th>
+                <th class="px-4 py-2 text-left">结果</th>
+            </tr>
+        </thead>
+        <tbody id="audit-body">
+            {% if records %}
+            {% for row in records %}
+            <tr class="border-t border-gray-100">
+                <td class="px-4 py-2 text-gray-500 text-xs">{{ row.ts }}</td>
+                <td class="px-4 py-2 font-mono text-xs">{{ row.action }}</td>
+                <td class="px-4 py-2 text-xs">{{ row.detail }}</td>
+                <td class="px-4 py-2">
+                    {% if row.result == 'success' %}
+                    <span class="text-green-600">✓</span>
+                    {% else %}
+                    <span class="text-red-600">✗</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                    暂无审计记录
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 分页 -->
+{% if total_pages > 1 %}
+<div class="flex justify-center gap-2 mt-4">
+    {% if page > 1 %}
+    <a href="/audit?page={{ page - 1 }}&module={{ module }}&action={{ action }}"
+       class="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50 no-underline text-gray-700">上一页</a>
+    {% endif %}
+    <span class="px-3 py-1 text-sm text-gray-500">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="/audit?page={{ page + 1 }}&module={{ module }}&action={{ action }}"
+       class="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50 no-underline text-gray-700">下一页</a>
+    {% endif %}
+</div>
+{% endif %}
+
+<script>
+let eventSource = null;
+
+function toggleSSE() {
+    const btn = document.getElementById('sse-toggle');
+    const status = document.getElementById('sse-status');
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+        btn.textContent = '▶ 实时';
+        status.textContent = '未连接';
+        status.className = 'text-xs text-gray-400';
+    } else {
+        eventSource = new EventSource('/audit/stream');
+        btn.textContent = '⏸ 暂停';
+        status.textContent = '已连接';
+        status.className = 'text-xs text-green-600';
+        eventSource.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            addAuditRow(data);
+        };
+        eventSource.onerror = function() {
+            status.textContent = '连接断开';
+            status.className = 'text-xs text-red-600';
+        };
+    }
+}
+
+function addAuditRow(data) {
+    const tbody = document.getElementById('audit-body');
+    // 移除空提示
+    if (tbody.children.length === 1 && tbody.children[0].children.length === 1) {
+        tbody.innerHTML = '';
+    }
+    const tr = document.createElement('tr');
+    tr.className = 'border-t border-gray-100 bg-blue-50';
+    tr.innerHTML = `
+        <td class="px-4 py-2 text-gray-500 text-xs">${data.ts}</td>
+        <td class="px-4 py-2 font-mono text-xs">${data.target}</td>
+        <td class="px-4 py-2 text-xs">${data.duration_ms}ms</td>
+        <td class="px-4 py-2">${data.ok ? '<span class="text-green-600">✓</span>' : '<span class="text-red-600">✗</span>'}</td>
+    `;
+    tbody.insertBefore(tr, tbody.firstChild);
+    setTimeout(() => tr.className = 'border-t border-gray-100', 2000);
+}
+</script>
+{% endblock %}
