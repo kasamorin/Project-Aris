@@ -131,8 +131,16 @@ async def provider_fetch_apply(
 
 
 def _load_providers() -> list[dict]:
-    """加载提供方列表（展示用；密钥状态只查环境变量是否存在，不读值）。"""
-    cfg = call("llm.providers.load")
+    """加载提供方列表（展示用；密钥状态只查环境变量是否存在，不读值）。
+
+    外围展示功能：配置文件缺/损坏时宽容降级为空列表，不中断页面。
+    """
+    try:
+        cfg = call("llm.providers.load")
+    except Exception as e:
+        from loguru import logger
+        logger.warning(f"提供商列表加载失败，按空列表展示: {e}")
+        return []
     if cfg is None:
         return []
     result = []
