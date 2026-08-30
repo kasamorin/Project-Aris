@@ -151,8 +151,8 @@
 - [x] pre-commit 钩子扩展（main 禁提交 / develop 直提警告，已实测三场景）
 - [x] release-check.sh 脚本（版本三源 + 分支检查，发布检查报告）
 - [x] AGENTS.md 登记 release-check 使用方式
-- [ ] PROGRESS.md 记录
-- [ ] 所有分支 --no-ff 合并回 develop
+- [x] PROGRESS.md 记录（2026-08-30 审查结论 + 偏差存档）
+- [x] 所有分支 --no-ff 合并回 develop（一二三四阶段全部收官，48 测试全绿）
 
 ### 回归主线（阶段五之后）
 
