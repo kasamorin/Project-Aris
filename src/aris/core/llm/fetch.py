@@ -26,7 +26,7 @@ from loguru import logger
 
 from aris.cfgtoml import config_dir
 
-from .config import LLMModel, LLMProvider, ProviderConfig
+from .config import LLMModel, LLMProvider, ProviderConfig, load_providers
 from .errors import AuthError, LLMError
 from .message import ApiFormat
 
@@ -392,3 +392,93 @@ def apply_sync(
 
     # 4. 写回 providers.toml（含备份）
     write_providers(providers_path, cfg)
+
+
+# ---------- 总线服务（供 WebUI 常驻服务调用的 /models 同步 + 退休管理）----------
+#
+# 命名 `llm.fetch.*` / `llm.retired.*`，与 /models 同步的核心逻辑一一对应；
+# 只暴露数据操作与只读查询，交互勾选 UI 由调用方（WebUI/CLI）负责。
+
+
+def fetch_plan(pid: str) -> dict:
+    """执行 fetch 审核全流程，返回可展示的同步计划摘要。
+
+    流程：加载配置 → 定位提供方 → 拉 /models → 退休巡检 + models.dev
+    enrichment → 生成计划。pid 不存在返回 {"error": ...}。
+    """
+    from aris.config import get_settings
+
+    cfg = load_providers(get_settings().llm_providers_file)
+    provider = next((p for p in cfg.providers if p.id == pid), None)
+    if provider is None:
+        return {"error": f"提供方 {pid} 不存在"}
+    endpoint_ids = fetch_provider_models(provider)
+    retired = load_retired()
+    modelsdev = modelsdev_load(get_settings().data_dir)
+    plan = plan_sync(provider, endpoint_ids, retired, modelsdev)
+
+    def _ctx(match: LLMModel) -> dict:
+        """模型计划条目的展示上下文。"""
+        return {
+            "id": match.id,
+            "name": match.name,
+            "context": f"{match.context_length // 1000}K" if match.context_length else "-",
+        }
+
+    return {
+        "provider_name": provider.name,
+        "added": [_ctx(c) for c in plan.candidates],
+        "kept": plan.diff.kept,
+        "missing": plan.diff.missing,
+        "restored": plan.retire.restored,
+        "retired_now": [e.model for e in plan.retire.retired_now],
+    }
+
+
+def fetch_apply(pid: str, selected: list[str]) -> None:
+    """应用 fetch 结果：勾选候选写回 providers.toml + 更新退休文件。
+
+    基于执行时刻的最新状态重新拉取（与 CLI 行为一致），确保 apply 幂等。
+    """
+    from aris.config import get_settings
+
+    settings = get_settings()
+    cfg = load_providers(settings.llm_providers_file)
+    provider = next((p for p in cfg.providers if p.id == pid), None)
+    if provider is None:
+        return
+    endpoint_ids = fetch_provider_models(provider)
+    retired = load_retired()
+    modelsdev = modelsdev_load(settings.data_dir)
+    plan = plan_sync(provider, endpoint_ids, retired, modelsdev)
+    apply_sync(
+        plan,
+        selected,
+        cfg=cfg,
+        providers_path=settings.llm_providers_file,
+        retired=retired,
+        retired_path=retired_file_path(),
+    )
+
+
+def retired_list() -> list[RetiredEntry]:
+    """列出当前退休模型记录。"""
+    return load_retired()
+
+
+def retired_delete(model_id: str) -> None:
+    """删除一条退休模型记录（模型回归端点后自动恢复）。"""
+    save_retired([e for e in load_retired() if e.model != model_id])
+
+
+def _register_bus_services() -> None:
+    """注册 /models 同步相关总线服务（模块导入时调用）。"""
+    from aris.core.bus import provide
+
+    provide("llm.fetch.plan", fetch_plan)
+    provide("llm.fetch.apply", fetch_apply)
+    provide("llm.retired.list", retired_list)
+    provide("llm.retired.delete", retired_delete)
+
+
+_register_bus_services()

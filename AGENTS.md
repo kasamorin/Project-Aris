@@ -38,10 +38,14 @@
 
 ## 现状
 
-- 当前版本 **v0.3.0**（2026-08-23）。
+- 当前版本 **v0.3.1**（2026-08-30）。
 - 骨架、LLM 接入、文字对话、行为扩展（函数调用）、联网搜索、人格系统均已完成。
 - WebUI 管理后台已完成（2026-08-23）：登录鉴权、仪表盘、审计、提供商管理、
   技能管理、配置管理、日志查看。
+- **WebUI 安全审查与总线化改造已完成（2026-08-30）**：路径穿越/TOML 注入/XSS/
+  鉴权绕过等安全漏洞全部修复；webui 全部路由改走 `core.call`（16 个总线服务 +
+  启动自检）；新增 11 个关键路径测试（总计 48 通过）；pre-commit 分支保护 +
+  `scripts/release-check.sh` 发布检查落地。详 `developDoc/SECURITY-AND-REFACTOR-PLAN.md`。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -89,6 +93,11 @@
 - **版本与 tag**：`pyproject.toml` 为唯一版本源，`src/aris/__init__.py`
   同步 `__version__`。版本发布时：develop 上 bump 版本 → 合并回 main →
   打 `vX.Y.Z` tag → `git push --tags`。
+- **发布前检查（2026-08-30 起）**：`bash scripts/release-check.sh` 校验
+  版本三源一致（pyproject / `__init__.py` / uv.lock）+ 当前分支为 develop
+  + 无未合并 feature 分支；通过再走发布流程。`.githooks/pre-commit` 负责
+  分支保护（main 禁直接提交，develop 直提警告），换机后
+  `bash scripts/install-git-hooks.sh` 一次装齐。
 - **保留分支**：`oldWish` 为历史保留分支（main 祖先：首次提交/README/许可证），
   **不要删除**，也不建议在此分支上继续开发。
 
@@ -313,6 +322,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |
 | 插件系统（草案，含后续讨论） | `developDoc/PLUGIN.md` |
 | WebUI 管理后台（审计/技能/提供商/插件） | `developDoc/WEBUI.md` |
+| WebUI 安全审查与总线化改造（修复清单/计划/进度） | `developDoc/SECURITY-AND-REFACTOR-PLAN.md` |
 | 项目蓝图 | `developDoc/Project-Aris.md` |
 | 记忆架构总体（候选参考） | `referenceDocumentation/记忆数据库-bydsv4fpre.html`、`MemoryTips-bygemini.md` |
 | 开发路线总体（候选参考） | `referenceDocumentation/总览-bydsv4fpre.html` |

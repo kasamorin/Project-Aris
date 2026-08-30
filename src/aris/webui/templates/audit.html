@@ -112,6 +112,13 @@ function toggleSSE() {
     }
 }
 
+function escText(s) {
+    // SSE 数据不可信：插入 innerHTML 前先做 HTML 转义
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+}
+
 function addAuditRow(data) {
     const tbody = document.getElementById('audit-body');
     // 移除空提示
@@ -121,9 +128,9 @@ function addAuditRow(data) {
     const tr = document.createElement('tr');
     tr.className = 'border-t border-gray-100 bg-blue-50';
     tr.innerHTML = `
-        <td class="px-4 py-2 text-gray-500 text-xs">${data.ts}</td>
-        <td class="px-4 py-2 font-mono text-xs">${data.target}</td>
-        <td class="px-4 py-2 text-xs">${data.duration_ms}ms</td>
+        <td class="px-4 py-2 text-gray-500 text-xs">${escText(data.ts)}</td>
+        <td class="px-4 py-2 font-mono text-xs">${escText(data.target)}</td>
+        <td class="px-4 py-2 text-xs">${escText(data.duration_ms)}ms</td>
         <td class="px-4 py-2">${data.ok ? '<span class="text-green-600">✓</span>' : '<span class="text-red-600">✗</span>'}</td>
     `;
     tbody.insertBefore(tr, tbody.firstChild);

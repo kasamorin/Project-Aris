@@ -23,8 +23,15 @@ _SECRET = os.environ.get("ARIS_WEBUI_HMAC_SECRET", secrets.token_hex(32))
 _COOKIE_NAME = "aris_session"
 _DEFAULT_MAX_AGE = 7 * 24 * 3600  # 7 天
 
-# 不需要鉴权的路径
-_PUBLIC_PATHS = {"/login", "/static"}
+# 不需要鉴权的路径：/login 精确匹配，/static/ 前缀匹配
+# （前缀过宽会让 /loginfoo 之类伪造路径绕过中间件，故分开处理）
+_PUBLIC_EXACT = {"/login"}
+_PUBLIC_PREFIXES = ("/static/",)
+
+
+def _is_public(path: str) -> bool:
+    """判断请求路径是否免鉴权。"""
+    return path in _PUBLIC_EXACT or path.startswith(_PUBLIC_PREFIXES)
 
 
 def _sign(payload: str) -> str:
@@ -72,9 +79,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """HTTP 中间件：未登录请求重定向到 /login。"""
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
-        # 公开路径跳过鉴权
+        """中间件入口：公开路径放行，其余校验 session cookie，未登录重定向到 /login。"""
         path = request.url.path
-        if any(path.startswith(p) for p in _PUBLIC_PATHS):
+        if _is_public(path):
             return await call_next(request)
 
         # 检查 session cookie

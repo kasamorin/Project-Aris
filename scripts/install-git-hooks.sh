@@ -12,4 +12,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 git config core.hooksPath .githooks
 
 echo "已安装 git hooks：$(git config core.hooksPath)"
-echo "目录：$REPO_ROOT/.githooks/（commit-msg 校验提交信息格式）"
+echo "目录：$REPO_ROOT/.githooks/"
+echo "  - commit-msg ：校验提交信息符合 Conventional Commits 格式"
+echo "  - pre-commit ：分支策略保护（main 禁直接提交 / develop 直提警告）"

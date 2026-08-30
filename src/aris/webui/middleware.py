@@ -14,6 +14,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """记录每个 HTTP 请求到 loguru，供 SSE 实时流捕获。"""
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
+        """中间件入口：计时并把每个页面请求写到 loguru，静态资源跳过。"""
         start = time.time()
         response = await call_next(request)
         duration = (time.time() - start) * 1000
