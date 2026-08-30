@@ -27,14 +27,17 @@ def _providers_path() -> str:
 
 
 def _load() -> ProviderConfig:
+    """从 providers.toml 加载配置。"""
     return load_providers(_providers_path())
 
 
 def _save(cfg: ProviderConfig) -> None:
+    """写回 providers.toml（write_providers 负责备份 + 序列化）。"""
     write_providers(_providers_path(), cfg)
 
 
 def _valid_id(value: str) -> bool:
+    """校验 id 合法性：小写字母/数字/连字符全匹配。"""
     return bool(_ID_RE.fullmatch(value))
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -107,7 +108,8 @@ async def audit_stream(request: Request) -> StreamingResponse:
 
     queue = audit_broker.subscribe()
 
-    async def event_generator():
+    async def event_generator() -> AsyncGenerator[str, None]:
+        """SSE 事件生成器：实时推送审计事件，断连即退出。"""
         try:
             while True:
                 if await request.is_disconnected():
