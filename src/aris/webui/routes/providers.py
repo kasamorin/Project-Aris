@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+import re
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from loguru import logger
 
 from ..templates import render
 
 router = APIRouter()
+
+# 合法提供方 id：小写字母、数字、连字符（fullmatch 防尾部换行绕过）
+_PID_RE = re.compile(r"[a-z0-9-]+")
 
 
 @router.get("/providers", response_class=HTMLResponse)
@@ -40,11 +45,10 @@ async def provider_add(
     api_key_env: str = Form(""),
 ) -> RedirectResponse:
     """添加新提供方。"""
-    import re
-    if not re.match(r"^[a-z0-9-]+$", id):
-        return RedirectResponse(url="/providers?error=ID格式错误", status_code=303)
+    if not _PID_RE.fullmatch(id):
+        return RedirectResponse(url="/providers?error=ID%E6%A0%BC%E5%BC%8F%E9%94%99%E8%AF%AF", status_code=303)
     _add_provider(id, name or id, base_url, api_key_env or f"{id.upper()}_API_KEY")
-    return RedirectResponse(url=f"/providers?selected={id}", status_code=303)
+    return RedirectResponse(url=f"/providers?selected={quote(id)}", status_code=303)
 
 
 @router.post("/providers/{pid}/delete", response_model=None)
@@ -63,7 +67,7 @@ async def provider_add_model(
 ) -> RedirectResponse:
     """添加模型到提供方。"""
     _add_model(pid, model_id, model_name or model_id, context_length)
-    return RedirectResponse(url=f"/providers?selected={pid}", status_code=303)
+    return RedirectResponse(url=f"/providers?selected={quote(pid)}", status_code=303)
 
 
 @router.post("/providers/{pid}/delete-model", response_model=None)
@@ -73,7 +77,7 @@ async def provider_delete_model(
 ) -> RedirectResponse:
     """从提供方删除模型。"""
     _delete_model(pid, model_id)
-    return RedirectResponse(url=f"/providers?selected={pid}", status_code=303)
+    return RedirectResponse(url=f"/providers?selected={quote(pid)}", status_code=303)
 
 
 @router.post("/providers/retired/{model}/delete", response_model=None)
@@ -117,7 +121,7 @@ async def provider_fetch_apply(
 ) -> RedirectResponse:
     """应用 fetch 结果：勾选的候选写入 providers.toml。"""
     _apply_fetch(pid, selected)
-    return RedirectResponse(url=f"/providers?selected={pid}", status_code=303)
+    return RedirectResponse(url=f"/providers?selected={quote(pid)}", status_code=303)
 
 
 def _load_providers() -> list[dict]:
@@ -151,7 +155,9 @@ def _load_providers() -> list[dict]:
                 "models": models,
             })
         return result
-    except Exception:
+    except Exception as e:
+        # 外围展示功能：宽容降级，但必须留下排查线索
+        logger.warning(f"加载提供方列表失败: {e}")
         return []
 
 
@@ -238,116 +244,95 @@ def _apply_fetch(pid: str, selected: list[str]) -> None:
             retired=retired,
             retired_path=retired_file_path(),
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"应用 fetch 结果失败 (pid={pid}): {e}")
+
+
+def _load_providers_toml(path: Path) -> dict:
+    """读取 providers.toml 为字典（文件缺失时返回空骨架）。"""
+    import tomllib
+
+    if not path.exists():
+        return {"providers": {"provider": []}}
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def _save_providers_toml(path: Path, data: dict) -> None:
+    """把字典写回 providers.toml（tomli_w 结构化写入，杜绝 TOML 注入）。"""
+    import tomli_w
+
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
 
 
 def _add_provider(pid: str, name: str, base_url: str, api_key_env: str) -> None:
-    """添加新提供方到 providers.toml。"""
+    """添加新提供方到 providers.toml（id 重复时静默跳过）。"""
     from ...config import get_settings
-    settings = get_settings()
-    path = settings.llm_providers_file
 
-    content = path.read_text(encoding="utf-8") if path.exists() else ""
-
-    if f'id = "{pid}"' in content:
+    path = get_settings().llm_providers_file
+    data = _load_providers_toml(path)
+    providers = data.setdefault("providers", {}).setdefault("provider", [])
+    if any(p.get("id") == pid for p in providers):
         return
-
-    new_provider = f'''
-[[providers.provider]]
-id = "{pid}"
-name = "{name}"
-base_url = "{base_url}"
-api_key_env = "{api_key_env}"
-'''
-    content += new_provider
-    path.write_text(content, encoding="utf-8")
+    providers.append({
+        "id": pid,
+        "name": name,
+        "base_url": base_url,
+        "api_key_env": api_key_env,
+    })
+    _save_providers_toml(path, data)
 
 
 def _delete_provider(pid: str) -> None:
     """从 providers.toml 删除提供方。"""
     from ...config import get_settings
-    settings = get_settings()
-    path = settings.llm_providers_file
-    if not path.exists():
-        return
 
-    content = path.read_text(encoding="utf-8")
-    lines = content.split("\n")
-    result = []
-    skip = False
-    for line in lines:
-        if line.strip() == f'id = "{pid}"':
-            skip = True
-            continue
-        if skip and line.strip().startswith("[[providers.provider]]"):
-            skip = False
-        if not skip:
-            result.append(line)
-
-    path.write_text("\n".join(result), encoding="utf-8")
+    path = get_settings().llm_providers_file
+    data = _load_providers_toml(path)
+    providers = data.get("providers", {}).get("provider", [])
+    data["providers"]["provider"] = [p for p in providers if p.get("id") != pid]
+    _save_providers_toml(path, data)
 
 
 def _add_model(pid: str, model_id: str, model_name: str, context_length: int) -> None:
-    """添加模型到提供方。"""
+    """添加模型到指定提供方（model id 全局重复时跳过，保持原语义）。"""
     from ...config import get_settings
-    settings = get_settings()
-    path = settings.llm_providers_file
-    if not path.exists():
+
+    path = get_settings().llm_providers_file
+    data = _load_providers_toml(path)
+    providers = data.get("providers", {}).get("provider", [])
+
+    # 全局查重：任何提供方下已有同 id 模型则跳过（与旧行为一致）
+    for p in providers:
+        if any(m.get("id") == model_id for m in p.get("models", [])):
+            return
+
+    target = next((p for p in providers if p.get("id") == pid), None)
+    if target is None:
         return
-
-    content = path.read_text(encoding="utf-8")
-
-    if f'id = "{model_id}"' in content:
-        return
-
-    lines = content.split("\n")
-    result = []
-    in_provider = False
-    inserted = False
-    for i, line in enumerate(lines):
-        result.append(line)
-        if f'id = "{pid}"' in line:
-            in_provider = True
-        if in_provider and not inserted:
-            if i + 1 < len(lines) and not lines[i + 1].strip().startswith("[[providers"):
-                if line.strip().startswith("thinking_default") or line.strip().startswith("capabilities"):
-                    new_model = f'''
-[[providers.provider.models]]
-id = "{model_id}"
-name = "{model_name}"
-request_name = "{model_id}"
-formats = ["chat"]
-context_length = {context_length}
-'''
-                    result.append(new_model)
-                    inserted = True
-
-    path.write_text("\n".join(result), encoding="utf-8")
+    target.setdefault("models", []).append({
+        "id": model_id,
+        "name": model_name,
+        "request_name": model_id,
+        "formats": ["chat"],
+        **({"context_length": context_length} if context_length else {}),
+    })
+    _save_providers_toml(path, data)
 
 
 def _delete_model(pid: str, model_id: str) -> None:
-    """从提供方删除模型。"""
+    """从指定提供方删除模型（只动该提供方自己的 models 表）。"""
     from ...config import get_settings
-    settings = get_settings()
-    path = settings.llm_providers_file
-    if not path.exists():
+
+    path = get_settings().llm_providers_file
+    data = _load_providers_toml(path)
+    providers = data.get("providers", {}).get("provider", [])
+
+    target = next((p for p in providers if p.get("id") == pid), None)
+    if target is None or "models" not in target:
         return
-
-    content = path.read_text(encoding="utf-8")
-    lines = content.split("\n")
-    result = []
-    skip = False
-    for line in lines:
-        if line.strip() == f'id = "{model_id}"':
-            skip = True
-            continue
-        if skip and (line.strip().startswith("[[providers") or line.strip().startswith("id =")):
-            skip = False
-        if not skip:
-            result.append(line)
-
-    path.write_text("\n".join(result), encoding="utf-8")
+    target["models"] = [m for m in target["models"] if m.get("id") != model_id]
+    _save_providers_toml(path, data)
 
 
 def _delete_retired(model: str) -> None:
@@ -357,5 +342,5 @@ def _delete_retired(model: str) -> None:
         entries = load_retired()
         kept = [e for e in entries if e.model != model]
         save_retired(kept)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"删除退休记录失败 (model={model}): {e}")
