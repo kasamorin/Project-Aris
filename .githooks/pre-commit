@@ -1,0 +1,37 @@
+#!/bin/sh
+# pre-commit hook —— 分支策略保护（AGENTS.md「Git 开发流程」）：
+#   - 禁止在 main 上非合并提交：main 保持稳定只进版本发布（合并提交放行）
+#   - develop 上非合并直接提交打印警告（不阻断，提交信息仍有 commit-msg 把关）
+#
+# 客户端的 hook 可以 --no-verify 绕开，属技术性建议；真正防线是提交规范
+# 与发布流程（scripts/release-check.sh）。
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+
+case "$BRANCH" in
+    main)
+        if [ -f "${GIT_DIR:-.git}/MERGE_HEAD" ]; then
+            # 版本发布合并（--no-ff，develop → main）
+            exit 0
+        fi
+        echo ""
+        echo "禁止在 main 分支上直接提交！"
+        echo "  main 只进版本发布：develop 上 bump 版本后 --no-ff 合并 + 打 tag。"
+        echo "  请切到 feature 分支开发，规范见 AGENTS.md「Git 开发流程」。"
+        echo ""
+        exit 1
+        ;;
+    develop)
+        if [ -f "${GIT_DIR:-.git}/MERGE_HEAD" ]; then
+            exit 0
+        fi
+        echo ""
+        echo "注意：正在 develop 直接提交（非合并）。"
+        echo "  规范要求先 feature 分支开发再 --no-ff 合并回 develop；"
+        echo "  小型文档/进度登记等确认无碍时可忽略本提示。"
+        echo ""
+        exit 0
+        ;;
+esac
+
+exit 0
