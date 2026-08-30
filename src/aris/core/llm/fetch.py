@@ -418,6 +418,7 @@ def fetch_plan(pid: str) -> dict:
     plan = plan_sync(provider, endpoint_ids, retired, modelsdev)
 
     def _ctx(match: LLMModel) -> dict:
+        """模型计划条目的展示上下文。"""
         return {
             "id": match.id,
             "name": match.name,

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
@@ -83,7 +84,8 @@ async def logs_stream(request: Request) -> StreamingResponse:
 
     queue = log_broker.subscribe()
 
-    async def event_generator():
+    async def event_generator() -> AsyncGenerator[str, None]:
+        """SSE 事件生成器：实时推送日志事件，断连即退出。"""
         try:
             while True:
                 if await request.is_disconnected():

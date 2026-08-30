@@ -79,7 +79,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """HTTP 中间件：未登录请求重定向到 /login。"""
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
-        # 公开路径跳过鉴权
+        """中间件入口：公开路径放行，其余校验 session cookie，未登录重定向到 /login。"""
         path = request.url.path
         if _is_public(path):
             return await call_next(request)

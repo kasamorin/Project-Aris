@@ -55,6 +55,7 @@ class SSEBroker:
 
     @property
     def client_count(self) -> int:
+        """当前在线客户端数。"""
         with self._lock:
             return len(self._clients)
 
