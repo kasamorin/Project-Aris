@@ -16,6 +16,7 @@ from . import http
 from .bus import (
     call,
     emit,
+    has_service,
     provide,
     query_recent,
     query_summary,
@@ -26,6 +27,7 @@ __all__ = [
     "audit",
     "call",
     "emit",
+    "has_service",
     "provide",
     "query_recent",
     "query_summary",

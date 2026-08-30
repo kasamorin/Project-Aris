@@ -72,13 +72,16 @@
 ### `src/aris/core/bus.py` —— 服务注册表 + 事件总线
 
 ```python
-from aris.core import call, emit, provide, subscribe, query_recent, query_summary
+from aris.core import call, emit, provide, subscribe, query_recent, query_summary, has_service
 
 # 注册服务（实例自注册，重名覆盖 + warning）
 provide("llm.stream", engine.stream)
 
 # 调用服务（同步；服务不存在返回 None + 模糊匹配建议日志）
 result = call("llm.stream", request)
+
+# 服务存在性检查（供启动自检等场景；call 对未注册服务宽容返回 None）
+provided = has_service("llm.stream")
 
 # 事件订阅与发布
 subscribe("memory.saved", handler)   # handler(payload)
@@ -117,6 +120,20 @@ summary = query_summary()            # 聚合统计
 | `loop.set_model` | `AgentLoop.__init__` | 切换模型：更新 loop 内部 model id | `chat/session.py` |
 | `persona.system_prompt` | `persona/__init__.py` | 返回 Aris 系统提示词 | `chat/session.py`（默认人设，`--system` 可覆盖） |
 | `skills.menu` | `SkillManager.__init__` | 返回技能清单（注入 system prompt 供模型判断何时激活） | `chat/session.py`（工具启用时） |
+| `audit.recent` | `core/bus.py` 模块级 | 最近审计流水（分页，按 wall_ts 倒序） | `webui` 审计页 |
+| `audit.summary` | `core/bus.py` 模块级 | 审计聚合统计 | `webui` 仪表盘 |
+| `llm.providers.load` | `core/llm/manage.py` 模块级 | 加载提供商配置 | `webui` 提供商页 |
+| `llm.providers.add/delete` | `core/llm/manage.py` 模块级 | 增删提供商（结构化写回 toml） | `webui` 提供商页 |
+| `llm.providers.model_add/model_delete` | `core/llm/manage.py` 模块级 | 增删模型 | `webui` 提供商页 |
+| `llm.fetch.plan/apply` | `core/llm/fetch.py` 模块级 | /models 同步：生成计划 / 应用计划 | `webui` 提供商页 |
+| `llm.retired.list/delete` | `core/llm/fetch.py` 模块级 | 退休模型：列表 / 手动删除 | `webui` 提供商页 |
+| `skills.list/detail` | `behavior/skills/manager.py` 模块级 | 技能清单 / 详情 | `webui` 技能页 |
+| `skills.create/save/delete` | `behavior/skills/manager.py` 模块级 | 技能增改删 | `webui` 技能页 |
+
+> 注：`llm.*` 提供商管理服务由 `core/llm/manage.py`、`core/llm/fetch.py`
+> **模块级注册**（import 即注册），无核心类实例；webui 的 `create_app()` 显式
+> import 三个所有者模块（llm.fetch / llm.manage / skills.manager）触发注册，
+> 并调用 `_verify_bus_services()` 做启动自检（依赖的 16 个服务缺一则记 ERROR）。
 
 > 注：`activate_skill` 是注册在 `ToolRegistry` 里的普通工具（经 `tools.execute`
 > 总线执行），**不是**独立服务。skill 系统详见 `developDoc/SKILLS.md`。
@@ -152,6 +169,27 @@ summary = query_summary()            # 聚合统计
 - 设计边界：skill 的发现/激活是 session 的装配动作，不额外走总线；
   skill 内的工具执行经现有 `tools.execute` 服务统一处理。
 
+### 已迁移（第四批：WebUI 管理层业务，2026-08-30）
+
+- 背景：WebUI 属管理层 UI，此前若直接跨模块 import 会违反总线规则。
+- 服务落位：
+  - `core/llm/manage.py`（新建）、`core/llm/fetch.py`（追加）：注册全部
+    `llm.providers.*` / `llm.fetch.*` / `llm.retired.*` 服务，接管提供商/
+    模型/退役管理，写回统一走 `fetch.write_providers`（tomli-w 结构化防注入）。
+  - `behavior/skills/manager.py`（追加）：注册 `skills.*` CRUD 服务，
+    技能目录用包内绝对路径 `SKILLS_DIR`，与运行时同源、与 CWD 解耦。
+  - `core/bus.py`（追加）：注册 `audit.recent` / `audit.summary`（内部封
+    装 `query_recent` / `query_summary`，webui 不直连 `core.audit`）。
+  - `core/bus.py` 新增 `has_service`（公开），供启动自检使用。
+- **webui 全部 9 个路由文件改走 `core.call`**，不再直接 import 任何
+  `core.llm` / `core.audit` / `behavior.skills` 业务函数。
+- `webui/__init__.py` 的 `create_app()` 是**触发注册点**（import 三个
+  所有者模块 + `_verify_bus_services()` 启动自检），非跨模块业务调用。
+- **基础设施例外（可直连，不算模块间通讯）**：
+  - `aris.config.get_settings()`（`.env` / `data_dir` 等启动级配置）。
+  - `aris.cfgtoml`（模块级 toml 读取/写回，配置页用）。
+  - 除此之外 webui 与任何模块的数据交换一律经总线。
+
 ### 明确不走总线（设计边界）
 
 - **对象构造 / 装配**（依赖注入）：`session` 构造 `BrowserManager`、
@@ -174,8 +212,8 @@ summary = query_summary()            # 聚合统计
 
 1. **事件总线首个真实使用者**：memory 模块入库成功时 emit
    `memory.saved`；voice 就绪时 emit `voice.ready`，验证事件链路。
-2. **WebUI**：审计查询接口（query_recent / query_summary）为将来
-   WebUI 监控预留，暂未做前端。
+2. ~~**WebUI**~~ → **已完成（2026-08-30）**：webui 管理层业务全部走总线
+   （见「第四批」），审计查询 `audit.recent` / `audit.summary` 服务化并被使用。
 
 > 枚举/魔法字符串收口与配置集中化**已完成**（2026-08-12）：
 > 7 组隐式枚举收为 StrEnum，可调参数进 `config/*.toml`，见 `developDoc/CONFIG.md`。
