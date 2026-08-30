@@ -26,7 +26,7 @@ from loguru import logger
 
 from aris.cfgtoml import config_dir
 
-from .config import LLMModel, LLMProvider, ProviderConfig
+from .config import LLMModel, LLMProvider, ProviderConfig, load_providers
 from .errors import AuthError, LLMError
 from .message import ApiFormat
 
