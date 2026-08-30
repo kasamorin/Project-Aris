@@ -1,8 +1,13 @@
-"""日志查看路由——历史日志文件浏览 + SSE 实时日志流。"""
+"""日志查看路由——历史日志文件浏览 + SSE 实时日志流。
+
+安全约定：date 必须是 YYYY-MM-DD、file 不得含路径分隔符，
+且 resolve 后必须仍在日志目录内——杜绝查询参数路径穿越读任意文件。
+"""
 
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
@@ -11,6 +16,9 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from ..templates import render
 
 router = APIRouter()
+
+# 合法日期参数（YYYY-MM-DD）
+_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 @router.get("/logs", response_class=HTMLResponse)
@@ -25,10 +33,10 @@ async def logs_page(
     settings = get_settings()
 
     import datetime
-    if date is None:
+    if date is None or not _DATE_RE.fullmatch(date):
         date = datetime.date.today().isoformat()
 
-    log_dir = settings.data_dir / "logs" / date
+    log_dir = (settings.data_dir / "logs" / date).resolve()
     log_files = []
     if log_dir.exists():
         for f in sorted(log_dir.iterdir(), reverse=True):
@@ -37,9 +45,15 @@ async def logs_page(
 
     log_content = ""
     total_lines = 0
-    if file and log_dir.exists():
-        log_path = log_dir / file
-        if log_path.exists():
+    # file 参数：拒绝任何含路径分隔符的名字，且 resolve 后不得越出日志目录
+    if (
+        file
+        and "/" not in file
+        and "\\" not in file
+        and log_dir.exists()
+    ):
+        log_path = (log_dir / file).resolve()
+        if log_path.is_relative_to(log_dir) and log_path.exists():
             lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
             total_lines = len(lines)
             # 分页：每页 200 行，显示最新的
