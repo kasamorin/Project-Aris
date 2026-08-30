@@ -134,14 +134,14 @@
 
 ## 五、TODO 清单
 
-### 当前（阶段一已完，阶段二已完）
+### 当前（阶段一二已完）
 
 - [x] `fix/webui-audit` 分支提交安全修复（12 个文件）
 - [x] 合并回 develop（`git merge --no-ff`）
 - [x] 创建 `refactor/webui-bus` 分支
 - [x] 设计总线服务接口并逐模块注册 provide()
 - [x] routes 全量迁移 `core.call` + 启动自检
-- [ ] 阶段二提交合并回 develop（`git merge --no-ff`）
+- [x] 阶段二 5 提交合并回 develop（`git merge --no-ff`，b85c756）
 
 ### 待办（阶段三-五）
 
