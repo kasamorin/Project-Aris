@@ -38,10 +38,15 @@
 </form>
 
 <script src="/static/marked.min.js"></script>
+<script src="/static/purify.min.js"></script>
 <script>
+    // marked 输出必须经 DOMPurify 净化后再插入 DOM（SKILL.md 内容不可信）
+    function renderSafe(md) {
+        return DOMPurify.sanitize(marked.parse(md));
+    }
     function updatePreview() {
         const content = document.getElementById('editor').value;
-        document.getElementById('preview').innerHTML = marked.parse(content);
+        document.getElementById('preview').innerHTML = renderSafe(content);
     }
     // 初始化预览
     updatePreview();
