@@ -49,6 +49,12 @@ def provide(service: str, fn: Callable[..., Any]) -> None:
         _services[service] = fn
 
 
+def has_service(service: str) -> bool:
+    """检查某服务是否已注册（供启动自检等场景使用）。"""
+    with _services_lock:
+        return service in _services
+
+
 def call(service: str, *args: Any, **kwargs: Any) -> Any:
     """调用一个已注册的服务，返回其返回值。
 
@@ -113,3 +119,19 @@ def _report_missing(kind: str, target: str, known: list[str]) -> None:
     close = get_close_matches(target, known, n=_MATCH_SUGGESTIONS, cutoff=_MATCH_CUTOFF)
     hint = f"，是不是想调用: {', '.join(close)}" if close else ""
     logger.error(f"{kind} {target} 未注册{hint}")
+
+
+def _audit_recent(limit: int | None = None) -> list[audit.AuditRecord]:
+    """审计流水查询（新→旧）；limit 缺省用配置值。"""
+    return audit.query_recent(limit=limit)
+
+
+def _audit_summary() -> dict[str, Any]:
+    """审计聚合统计（按目标合并）。"""
+    return audit.query_summary()
+
+
+# 审计查询注册为总线服务：常驻服务（WebUI）统一经 core.call 获取，
+# 与 llm.* / skills.* 服务保持同一调用口径
+provide("audit.recent", _audit_recent)
+provide("audit.summary", _audit_summary)
