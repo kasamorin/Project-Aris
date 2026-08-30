@@ -24,7 +24,6 @@ def _gather_stats() -> dict:
     """收集仪表盘统计数据。"""
     import datetime
     import os
-    from pathlib import Path
     from ...config import get_settings
 
     settings = get_settings()
@@ -46,11 +45,11 @@ def _gather_stats() -> dict:
     except Exception:
         pass
 
-    # 技能数
+    # 技能数（与运行时 SkillManager 同源的包内目录，不再依赖 CWD）
+    from ...behavior.skills.manager import SKILLS_DIR as _SKILLS_DIR
     skills_count = 0
-    skills_dir = Path("skills")
-    if skills_dir.exists():
-        skills_count = len([d for d in skills_dir.iterdir() if d.is_dir()])
+    if _SKILLS_DIR.exists():
+        skills_count = len([d for d in _SKILLS_DIR.iterdir() if d.is_dir()])
 
     # 提供商健康状态
     providers_healthy = True

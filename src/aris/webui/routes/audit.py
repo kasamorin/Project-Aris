@@ -40,22 +40,27 @@ def _query_records(
     page: int = 1,
     page_size: int = 50,
 ) -> list[dict]:
-    """查询审计记录。"""
+    """查询审计记录（先过滤后分页，page=1 为最新一页）。"""
     try:
         from ...core.audit import query_recent
-        import time
-        records = query_recent(limit=page_size)
+        import datetime
+
+        # 拉取足够覆盖目标页的记录数，再切片出该页窗口
+        records = query_recent(limit=page * page_size)
+        matched = [
+            r for r in records
+            if _record_matches(r, module, action)
+        ]
+        window = matched[(page - 1) * page_size: page * page_size]
         result = []
-        for r in records:
-            # 过滤
+        for r in window:
+            wall = getattr(r, "wall_ts", None)
+            ts_str = (
+                datetime.datetime.fromtimestamp(wall).strftime("%H:%M:%S")
+                if wall else "-"
+            )
             target_parts = r.target.split(".")
             mod = target_parts[0] if target_parts else r.target
-            if module and mod != module:
-                continue
-            if action and action not in r.target:
-                continue
-            # 将 monotonic 时间戳转为可读时间（近似）
-            ts_str = time.strftime("%H:%M:%S")
             result.append({
                 "ts": ts_str,
                 "module": mod,
@@ -70,22 +75,27 @@ def _query_records(
         return []
 
 
+def _record_matches(r: object, module: str | None, action: str | None) -> bool:
+    """按模块/动作筛选一条审计记录。"""
+    target = r.target  # type: ignore[attr-defined]
+    target_parts = target.split(".")
+    mod = target_parts[0] if target_parts else target
+    if module and mod != module:
+        return False
+    if action and action not in target:
+        return False
+    return True
+
+
 def _count_records(module: str | None = None, action: str | None = None) -> int:
-    """统计审计记录总数。"""
+    """统计筛选后的记录总数（上限为环形缓冲容量）。"""
     try:
         from ...core.audit import query_recent
-        records = query_recent(limit=2000)
-        count = 0
-        for r in records:
-            target_parts = r.target.split(".")
-            mod = target_parts[0] if target_parts else r.target
-            if module and mod != module:
-                continue
-            if action and action not in r.target:
-                continue
-            count += 1
-        return count
-    except Exception:
+        records = query_recent(limit=None)  # 全量（受 max_records 环形缓冲约束）
+        return sum(1 for r in records if _record_matches(r, module, action))
+    except Exception as e:
+        from loguru import logger
+        logger.warning(f"审计计数失败: {e}")
         return 0
 
 

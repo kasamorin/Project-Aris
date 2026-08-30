@@ -9,7 +9,7 @@
     <div class="flex gap-2">
         <a href="/skills/{{ skill.name }}/edit"
            class="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300">编辑</a>
-        <button onclick="deleteSkill('{{ skill.name }}')"
+        <button onclick="deleteSkill({{ skill.name | tojson }})"
                 class="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200">删除</button>
     </div>
 </div>
@@ -27,9 +27,12 @@
 </div>
 
 <script src="/static/marked.min.js"></script>
+<script src="/static/purify.min.js"></script>
 <script>
+    // marked 输出必须经 DOMPurify 净化后再插入 DOM（SKILL.md 内容不可信）
     const raw = document.getElementById('skill-raw').value;
-    document.getElementById('skill-content').innerHTML = marked.parse(raw);
+    document.getElementById('skill-content').innerHTML =
+        DOMPurify.sanitize(marked.parse(raw));
 </script>
 
 <script>

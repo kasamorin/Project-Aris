@@ -90,7 +90,9 @@ async def config_save(
     request: Request,
     module: str = Form(...),
 ) -> RedirectResponse:
-    """保存模块配置。"""
+    """保存模块配置。module 必须在白名单内（防路径穿越写任意 toml）。"""
+    if module not in _MODULES:
+        return RedirectResponse(url="/config", status_code=303)
     # 备份旧配置
     _backup_config(module)
     # 读取表单数据并写回 toml
@@ -149,9 +151,11 @@ def _backup_config(module: str) -> None:
 
 
 def _save_module_config(module: str, form_data: dict) -> None:
-    """把表单数据写回 toml 文件。"""
+    """把表单数据写回 toml 文件（键白名单：只接受该模块声明的字段）。"""
     from ...cfgtoml import config_dir
+
     toml_path = config_dir() / f"{module}.toml"
+    allowed_keys = {f["key"] for f in _MODULE_FIELDS.get(module, [])}
 
     # 读取现有配置
     existing = {}
@@ -159,9 +163,9 @@ def _save_module_config(module: str, form_data: dict) -> None:
         with open(toml_path, "rb") as f:
             existing = tomllib.load(f)
 
-    # 更新字段
+    # 更新字段：未在白名单内的表单键一律丢弃，防任意键注入
     for key, value in form_data.items():
-        if key == "module":
+        if key == "module" or key not in allowed_keys:
             continue
         # 尝试转换类型
         existing[key] = _convert_toml_value(value)
@@ -190,16 +194,27 @@ def _convert_toml_value(value: str) -> str | int | float | bool:
     return value
 
 
+def _escape_toml_string(value: str) -> str:
+    """转义 TOML basic string 的特殊字符（反斜杠/引号/控制字符）。"""
+    out = value.replace("\\", "\\\\")
+    out = out.replace('"', '\\"')
+    # 其余控制字符（含换行/制表）统一转成 \uXXXX，避免破坏行结构
+    out = "".join(
+        ch if ch >= " " else f"\\u{ord(ch):04X}" for ch in out
+    )
+    return out
+
+
 def _write_toml(path: Path, data: dict) -> None:
-    """简单的 TOML 写入（不依赖 toml 库）。"""
+    """简单的 TOML 写入（不依赖 toml 库；字符串必须转义防结构注入）。"""
     lines: list[str] = []
     for key, value in data.items():
         if isinstance(value, str):
-            lines.append(f'{key} = "{value}"')
+            lines.append(f'{key} = "{_escape_toml_string(value)}"')
         elif isinstance(value, bool):
             lines.append(f'{key} = {str(value).lower()}')
         elif isinstance(value, (int, float)):
             lines.append(f'{key} = {value}')
         else:
-            lines.append(f'{key} = "{value}"')
+            lines.append(f'{key} = "{_escape_toml_string(str(value))}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

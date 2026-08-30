@@ -18,7 +18,7 @@ import threading
 from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
-from time import monotonic
+from time import monotonic, time
 from typing import Any
 
 from aris.cfgtoml import load_config
@@ -48,7 +48,8 @@ class AuditRecord:
 
     kind: str          # AuditKind（call 服务调用 / event 事件发布）
     target: str        # 服务名（如 llm.stream）或事件名（如 memory.saved）
-    ts: float          # 记录时间戳（monotonic 秒）
+    ts: float          # 记录时间戳（monotonic 秒，单调可用于排序/算差值）
+    wall_ts: float     # 墙钟时间戳（time.time() 秒，供展示为可读时间）
     duration: float    # 本次调用耗时（秒）
     ok: bool = True    # 是否成功（服务调用抛异常时为 False）
     detail: str = ""   # 附加信息（如调用方模块名）
@@ -78,6 +79,7 @@ class AuditLog:
                         kind=kind,
                         target=target,
                         ts=monotonic(),
+                        wall_ts=time(),
                         duration=duration,
                         ok=ok,
                         detail=detail,
