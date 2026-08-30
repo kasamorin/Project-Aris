@@ -89,6 +89,11 @@
 - **版本与 tag**：`pyproject.toml` 为唯一版本源，`src/aris/__init__.py`
   同步 `__version__`。版本发布时：develop 上 bump 版本 → 合并回 main →
   打 `vX.Y.Z` tag → `git push --tags`。
+- **发布前检查（2026-08-30 起）**：`bash scripts/release-check.sh` 校验
+  版本三源一致（pyproject / `__init__.py` / uv.lock）+ 当前分支为 develop
+  + 无未合并 feature 分支；通过再走发布流程。`.githooks/pre-commit` 负责
+  分支保护（main 禁直接提交，develop 直提警告），换机后
+  `bash scripts/install-git-hooks.sh` 一次装齐。
 - **保留分支**：`oldWish` 为历史保留分支（main 祖先：首次提交/README/许可证），
   **不要删除**，也不建议在此分支上继续开发。
 

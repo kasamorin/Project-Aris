@@ -145,10 +145,12 @@
 
 ### 待办（阶段三-五）
 
-- [ ] 补类型标注 + docstring 规范化
-- [ ] 补 auth/rate_limit/config/skills 测试
-- [ ] pre-commit 钩子扩展
-- [ ] release-check.sh 脚本
+- [x] 补类型标注 + docstring 规范化（AST 全量过筛清零）
+- [x] 补 auth/rate_limit/config/skills 测试（tests/test_webui.py，11 用例）
+- [x] secrets 可用性问题：补充测试时发现 providers 页缺配置 500 → 已宽容降级
+- [x] pre-commit 钩子扩展（main 禁提交 / develop 直提警告，已实测三场景）
+- [x] release-check.sh 脚本（版本三源 + 分支检查，发布检查报告）
+- [x] AGENTS.md 登记 release-check 使用方式
 - [ ] PROGRESS.md 记录
 - [ ] 所有分支 --no-ff 合并回 develop
 
