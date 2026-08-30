@@ -42,11 +42,12 @@ def _query_records(
 ) -> list[dict]:
     """查询审计记录（先过滤后分页，page=1 为最新一页）。"""
     try:
-        from ...core.audit import query_recent
         import datetime
 
+        from aris.core import call
+
         # 拉取足够覆盖目标页的记录数，再切片出该页窗口
-        records = query_recent(limit=page * page_size)
+        records = call("audit.recent", page * page_size) or []
         matched = [
             r for r in records
             if _record_matches(r, module, action)
@@ -90,8 +91,8 @@ def _record_matches(r: object, module: str | None, action: str | None) -> bool:
 def _count_records(module: str | None = None, action: str | None = None) -> int:
     """统计筛选后的记录总数（上限为环形缓冲容量）。"""
     try:
-        from ...core.audit import query_recent
-        records = query_recent(limit=None)  # 全量（受 max_records 环形缓冲约束）
+        from aris.core import call
+        records = call("audit.recent", None) or []  # 全量（受 max_records 环形缓冲约束）
         return sum(1 for r in records if _record_matches(r, module, action))
     except Exception as e:
         from loguru import logger
