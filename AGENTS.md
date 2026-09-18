@@ -60,7 +60,8 @@
   （2026-09-18，见「已定案」）；下一步按「`store/` 底层先行 → `knowledge/`」进入实现。
 - **数据库地基已跑通（2026-09-18）**：`store/` 的便携 PostgreSQL 17.11 + pgvector 0.8.1
   就位，`aris db init|start|stop|status|psql` 可用；本地 embedding（Bekko a25m，384 维）
-  也已跑通（`aris store info|embed`），迁移与向量检索 helper 待做。
+  也已跑通（`aris store info|embed`）。**`store/` 三块地基（PG 环境 / embedding /
+  迁移 + 向量检索 helper）已齐**，下一步进 `knowledge/`。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -217,7 +218,11 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
     CLI `aris db init|start|stop|status|psql`；实测 PG 17.11 + pgvector 0.8.1
   - 已实现（2026-09-18 续）：embedding 抽象 + 本地 Bekko provider（384 维，懒加载；
     重依赖为 dependency-group `embedding` 且默认安装）、`aris store info|embed`
-  - 待实现：迁移、向量检索 helper
+  - 已实现（2026-09-18 续二）：迁移机制（`migrate.py`：按 owner+version 记录、
+    单事务应用、防历史改写）与 pgvector helper（`vector.py`：建 HNSW 索引 / upsert /
+    近邻检索 / 维度读取；标识符校验 + 算子白名单）、CLI `aris db migrate`；
+    总线服务合计 8 个（`store.health` / `store.embed` / `store.migrate.*` / `store.vector.*`）
+  - 待实现：无既定项（将来按需扩展，如云端 provider）
 - `memory/` —— 记忆系统：Embedding + 数据库（复用 `store/`，不自建第二套）
 - `knowledge/` —— **知识库（2026-09-18 定案，尚未实现）**：面向外部资料的独立 RAG
   检索，含摄入、分块、来源管理、检索语义。**不做 skill**（属内部底层设施，经大总线

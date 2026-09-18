@@ -11,13 +11,22 @@ from typing import Any
 from .pgenv import PgEnv, detect
 
 
-def connect(env: PgEnv | None = None):
-    """建立数据库连接（调用方负责关闭；返回 psycopg.Connection）。"""
+def connect(env: PgEnv | None = None, *, register_vector: bool = True):
+    """建立数据库连接（调用方负责关闭；返回 psycopg.Connection）。
+
+    默认注册 pgvector 适配器：此后 Python 列表可直接读写 ``vector`` 列，
+    不必手工拼字面量。扩展未建或适配包缺失时自动降级（不影响普通 SQL）。
+    """
     try:
         import psycopg
     except ImportError as exc:  # 依赖缺失属环境问题，给出可读提示
         raise RuntimeError("缺少 psycopg 依赖，请先运行 uv sync") from exc
-    return psycopg.connect((env or detect()).dsn)
+    conn = psycopg.connect((env or detect()).dsn)
+    if register_vector:
+        from .vector import register_adapters
+
+        register_adapters(conn)
+    return conn
 
 
 def health(env: PgEnv | None = None) -> dict[str, Any]:

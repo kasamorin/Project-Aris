@@ -102,6 +102,8 @@ pgvector 在 glibc Linux + GCC/Clang 上会自动启用 `USE_TARGET_CLONES`
 | `store/db.py` | psycopg 连接与探活（对外总线服务 `store.health`） |
 | `store/conf.py` + `config/store.toml` | embedding 可调参数（provider / 模型 / batch / 截断维度） |
 | `store/embedding/` | embedding 抽象（Protocol）+ 本地 Bekko provider（懒加载；总线服务 `store.embed`） |
+| `store/migrate.py` | 轻量迁移：按 `(owner, version)` 记录到 `store_schema_migrations`，每条单事务，防历史改写 |
+| `store/vector.py` | pgvector 通用 helper：建 HNSW 索引 / upsert / 近邻检索 / 维度读取（标识符校验 + 算子白名单） |
 
 - CLI：`aris db init|start|stop|status|psql`（`psql` 的后续参数原样透传）
 - 服务端口默认 **55432**，避开将来系统 PG 的 5432；socket 落 `data/pg/run`，
@@ -118,6 +120,11 @@ pgvector 在 glibc Linux + GCC/Clang 上会自动启用 `USE_TARGET_CLONES`
   不污染用户主目录；`pg_ctl` 启动失败时会附带服务日志末尾，便于定位。
 - **embedding**：`aris store info|embed` 可用；实测本地 Bekko a25m **384 维**编码通过，
   模型缓存落 `data/models`（约 224MB）。
+- **迁移与向量 helper（2026-09-18 续）**：`aris db migrate` 可用；临时表上实测
+  「建 HNSW 索引 → upsert → 余弦近邻检索 → where 过滤 → 维度读取」全链路通过，
+  集成用例在 PG 未运行时自动跳过。`store/` 对外共 8 个总线服务：
+  `store.health` / `store.embed` / `store.migrate.run|pending` /
+  `store.vector.search|upsert|ensure_index|dimension`。
 - **重依赖打包（2026-09-18 定案）**：embedding 栈（sentence-transformers /
   `optimum[openvino]` / openvino / `transformers<5.1` / torch + torchvision）放
   **dependency-group `embedding` 并加入 `[tool.uv] default-groups`**：`uv sync` 一次装齐

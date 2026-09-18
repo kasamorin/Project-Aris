@@ -6,6 +6,24 @@
 
 ## 最新状态
 
+### 2026-09-18：store/ 迁移机制与向量检索 helper 完成（`store/` 地基收尾）
+
+- `store/migrate.py`：自研轻量迁移——迁移以 Python 函数登记（按参数建表方便），
+  记录表 `store_schema_migrations` 按 `(owner, version)` 唯一，**每条迁移单独事务**
+  （PG 的 DDL 可回滚，失败不留半截 schema），**已应用的迁移改名即报错**（防 schema 漂移）；
+  `store` / `knowledge` / `memory` 各自登记自己那一摊，互不干扰
+- `store/vector.py`：pgvector 通用动作——建 HNSW 索引（cosine / l2 / 内积，可给
+  m 与 ef_construction）、upsert（冲突键覆盖）、近邻检索（支持 `where` 过滤与
+  `hnsw.ef_search`）、`count`、维度读取；**表名/列名/索引名一律校验后引用，算子与
+  opclass 走白名单**，其余参数全部占位符
+- 总线服务增至 **8 个**：`store.health` / `store.embed` / `store.migrate.run|pending` /
+  `store.vector.search|upsert|ensure_index|dimension`；CLI 新增 `aris db migrate`
+- 依赖新增 `pgvector>=0.5`（psycopg 适配器：连接时自动注册，缺失或未建扩展则降级）
+- 实测：`uv run pytest` **67 passed**；临时表集成用例真跑通
+  「建索引 → upsert → 余弦近邻 → where 过滤 → 维度读取」（DB 未运行时自动跳过）
+- **`store/` 三块地基（PG 环境 / embedding / 迁移 + 检索 helper）已齐，
+  下一步进 `knowledge/`**：先建表（migration）+ 分块，再做 CLI 摄入与检索
+
 ### 2026-09-18：store/ embedding 抽象跑通（本地 Bekko 384 维）
 
 - 新增 `store/embedding/`：`base.py`（`EmbeddingProvider` Protocol + `EmbeddingError`）、

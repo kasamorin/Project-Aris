@@ -630,6 +630,25 @@ def _cmd_db(args: argparse.Namespace) -> int:
         logger.info("数据库已停止" if stop(env) else "数据库本就未运行")
         return 0
 
+    if action == "migrate":
+        from contextlib import closing
+
+        from aris.store.db import connect
+        from aris.store.migrate import MigrationError, run as run_migrations
+
+        if not is_running(env):
+            logger.error("数据库未运行，先执行 aris db start")
+            return 1
+        try:
+            with closing(connect(env)) as conn:
+                done = run_migrations(conn)
+        except MigrationError as e:
+            logger.error(str(e))
+            return 1
+        done_sql = f"：{', '.join(done)}" if done else ""
+        print(f"本次应用 {len(done)} 条迁移{done_sql}")
+        return 0
+
     if action == "psql":
         return subprocess.call([str(env.tool("psql")), *args.psql_args], env=env.tool_env())
 
@@ -802,6 +821,8 @@ def main(argv: list[str] | None = None) -> int:
     p_db_status = p_db_sub.add_parser("status", help="查看环境与运行状态")
     p_db_status.add_argument("--no-probe", action="store_true", help="跳过连接探活")
     p_db_status.set_defaults(func=_cmd_db)
+    p_db_migrate = p_db_sub.add_parser("migrate", help="应用待执行的 schema 迁移")
+    p_db_migrate.set_defaults(func=_cmd_db)
     p_db_psql = p_db_sub.add_parser("psql", help="进入 psql（后续参数原样透传）")
     p_db_psql.set_defaults(func=_cmd_db, psql_args=[])
 
