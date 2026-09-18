@@ -2,9 +2,28 @@
 
 > 每次开发前先读本文件，了解最新状态。
 
-## 当前版本：v0.3.1
+## 当前版本：v0.4.0
 
 ## 最新状态
+
+### 2026-09-18：版本 v0.4.0 发布（知识库首期）
+
+- 版本号三源同步 bump 至 **v0.4.0**（minor 级：新增知识库整块能力）
+- 本版内容：
+  - **`store/` 模块（新）**：便携 PostgreSQL 17.11 + pgvector 0.8.1（micromamba +
+    conda-forge，免 root；`aris db init|start|stop|status|psql|migrate`）、embedding
+    抽象 + 本地 Bekko a25m（384 维，`aris store info|embed`）、迁移机制与 pgvector
+    helper，共 10 个总线服务
+  - **`knowledge/` 模块（新）**：两表迁移、标题层级分块 + 定长兜底重叠、
+    md/txt/html 摄入（content hash 幂等 + 软删重建）、纯向量检索（带来源与距离）、
+    CLI `aris knowledge add|list|remove|search|reindex`
+  - **agent 工具 `knowledge_search`**：与 `web_search` 并列、由 Aris 自主调用
+  - **WebUI 知识库页 `/knowledge`**：上传落盘 + 后台摄入 + 轮询进度、文档列表/移除、
+    检索试验、重建索引；同版还带来**免鉴权模式**（未配密码时自动只绑回环）
+- 合并路径：`feat/knowledge` → `develop`（--no-ff）→ `main`，打 tag `v0.4.0`
+- 测试：`uv run pytest` **103 passed**
+- 下一步候选：真 API 实测（Aris 是否主动查库）/ 知识库第二阶段（PDF、混合检索）/
+  记忆系统（`memory/` 复用 `store/`）
 
 ### 2026-09-18：修知识库页「上传后无限刷新」（模板 JS 死循环）
 
