@@ -39,12 +39,28 @@
     </p>
 </div>
 
-<!-- 后台任务进度（有 job 参数或最近有任务时显示） -->
-<div id="job-panel" class="bg-white rounded-lg shadow p-4 mb-6" style="display:none">
-    <h3 class="font-medium mb-2">摄入进度</h3>
-    <div id="job-summary" class="text-sm text-gray-600 mb-2"></div>
-    <div id="job-items" class="text-xs font-mono whitespace-pre-wrap text-gray-700"></div>
+<!-- 后台任务进度：带 ?job= 时轮询；否则只静态展示最近一次（不轮询，避免无谓刷新） -->
+{% set panel_job = tracked_job or last_job %}
+{% if panel_job or job_expired %}
+<div id="job-panel" class="bg-white rounded-lg shadow p-4 mb-6"
+     data-job-id="{{ tracked_job.id if tracked_job else '' }}"
+     data-poll="{{ 'true' if tracked_job and tracked_job.status in ('pending', 'running') else 'false' }}">
+    <h3 class="font-medium mb-2">
+        摄入进度
+        {% if not tracked_job %}<span class="text-xs text-gray-400">（最近一次）</span>{% endif %}
+    </h3>
+    {% if job_expired %}
+    <div class="text-sm text-yellow-700">任务已过期（WebUI 可能重启过），下面的列表已是最终状态。</div>
+    {% else %}
+    {% set labels = {'pending': '排队中', 'running': '进行中', 'done': '已完成', 'failed': '失败'} %}
+    <div id="job-summary" class="text-sm text-gray-600 mb-2">
+        状态：{{ labels.get(panel_job.status, panel_job.status) }}　进度：{{ panel_job.done }}/{{ panel_job.total }}{% if panel_job.error %}　错误：{{ panel_job.error }}{% endif %}
+    </div>
+    <div id="job-items" class="text-xs font-mono whitespace-pre-wrap text-gray-700">{% for item in panel_job["items"] %}{{ item.status }} {{ item.chunks }} 块  {{ item.path }}{% if item.reason %}  ({{ item.reason }}){% endif %}
+{% endfor %}</div>
+    {% endif %}
 </div>
+{% endif %}
 
 <!-- 检索试验 -->
 <div class="bg-white rounded-lg shadow p-4 mb-6">
@@ -116,36 +132,41 @@
 </div>
 
 <script>
-const jobId = new URLSearchParams(location.search).get('job')
-    || ({{ jobs|length }} ? {{ (jobs[0].id if jobs else '')|tojson }} : null);
+// 轮询只在「URL 里显式带 ?job= 且任务仍在跑」时发生（data-poll 由服务端判定）。
+// 终态一律用 location.replace('/knowledge') 收尾：URL 不带 job 参数 → 不会再进轮询/
+// 刷新分支，避免「完成后 reload → 再判定完成 → 再 reload」的死循环。
+const panel = document.getElementById('job-panel');
+const jobId = panel ? panel.dataset.jobId : '';
+const shouldPoll = panel ? panel.dataset.poll === 'true' : false;
+
+const LABELS = {pending: '排队中', running: '进行中', done: '已完成', failed: '失败',
+                unknown: '已过期（WebUI 重启过）'};
 
 function renderJob(job) {
-    const panel = document.getElementById('job-panel');
-    panel.style.display = 'block';
-    const label = {pending: '排队中', running: '进行中', done: '已完成', failed: '失败',
-                   unknown: '已过期（后台重启）'}[job.status] || job.status;
     document.getElementById('job-summary').textContent =
-        `状态：${label}　进度：${job.done}/${job.total}` + (job.error ? `　错误：${job.error}` : '');
+        `状态：${LABELS[job.status] || job.status}　进度：${job.done}/${job.total}`
+        + (job.error ? `　错误：${job.error}` : '');
     document.getElementById('job-items').textContent = (job.items || [])
-        .map(i => `${i.status.padEnd(8)} ${String(i.chunks).padStart(4)} 块  ${i.path}${i.reason ? '  (' + i.reason + ')' : ''}`)
+        .map(i => `${i.status} ${i.chunks} 块  ${i.path}${i.reason ? '  (' + i.reason + ')' : ''}`)
         .join('\n');
 }
 
 async function pollJob() {
-    if (!jobId) return;
-    const resp = await fetch(`/knowledge/jobs/${jobId}`);
-    const job = await resp.json();
+    let job;
+    try {
+        job = await (await fetch(`/knowledge/jobs/${jobId}`)).json();
+    } catch (e) {
+        setTimeout(pollJob, 2000);   // 网络抖动：退一步再试，不刷新页面
+        return;
+    }
     renderJob(job);
     if (job.status === 'pending' || job.status === 'running') {
         setTimeout(pollJob, 1000);
-    } else {
-        // 完成后刷新一次列表（带上 job 参数以保留进度显示）
-        setTimeout(() => { if (!sessionStorage.getItem('kb-reloaded')) {
-            sessionStorage.setItem('kb-reloaded', '1'); location.reload();
-        } }, 800);
+        return;
     }
+    location.replace('/knowledge');  // 终态/任务不存在：清掉 job 参数并刷新一次
 }
-sessionStorage.removeItem('kb-reloaded');
-pollJob();
+
+if (shouldPoll && jobId) pollJob();
 </script>
 {% endblock %}

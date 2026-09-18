@@ -6,6 +6,30 @@
 
 ## 最新状态
 
+### 2026-09-18：修知识库页「上传后无限刷新」（模板 JS 死循环）
+
+- 现象（用户报）：网页说上传完了，但页面不停 `GET /knowledge/jobs/<id>` 并反复刷新
+- 根因：模板里用 `sessionStorage` 做「只刷新一次」的守门，却在**每次加载时先清掉**它：
+  任务完成后 `location.reload()` → 守门被清 → 判定"已完成" → 再 reload，无限循环。
+  另外还写了 `jobs[0]` 兜底，等于没有 `job` 参数时也会轮询最近一次任务
+- 重写为有明确终止条件的形式：
+  - 轮询只在「URL 显式带 `?job=` **且**该任务仍在 pending/running」时发生；
+    这个判定由**服务端**写进 `data-poll`，测试可直接断言，不靠读 JS
+  - 终态（done/failed/任务不存在）一律 `location.replace('/knowledge')`——
+    URL 丢掉 `job` 参数 → 不会再进轮询/刷新分支，**循环在结构上不可能发生**
+  - 不带参数时进度面板静态显示"最近一次任务"，不轮询
+  - 任务 id 不存在（WebUI 重启过）显示「任务已过期」，同样不轮询
+- 顺带修：Jinja 里 `job.items` 被解析成 **dict 的 `.items` 方法**（`TypeError:
+  'builtin_function_or_method' object is not iterable`），改用 `job["items"]`
+- 测试：新增 3 例回归（完成态 `data-poll=false` 且不再含 `sessionStorage`、
+  进行中才轮询、过期任务只提示不轮询）；并让知识库用例**失败也清理**临时文档
+  （上一轮失败的用例把 `/tmp/.../kb-webui.md` 漏在了真实库里，已清理）、
+  断言改用**完整路径**且容忍库里已有别的文档（用户已投喂 `刑法.md`，129 块）
+- 实测：`uv run pytest` **103 passed**；真实服务验证：上传 → running（约 21s
+  加载本地模型）→ done → 完成态页面 `data-poll="false"`、收尾为
+  `location.replace('/knowledge')`
+- 用户侧注意：旧标签页里的 JS 还在循环，**关掉重开**即可
+
 ### 2026-09-18：修「数据库未运行」的两个真 bug（is_running 误判 + 残留 pidfile 挡启动）
 
 - 现象（用户报）：WebUI 知识库页显示 `connection failed ... Connection refused`；

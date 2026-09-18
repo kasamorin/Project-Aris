@@ -41,8 +41,10 @@ def _friendly_db_error(message: str) -> str:
 
 
 @router.get("/knowledge", response_class=HTMLResponse)
-def knowledge_page(request: Request, q: str = "", top_k: int = 0) -> HTMLResponse:
-    """知识库页面；带 q 参数时顺带做一次检索试验。
+def knowledge_page(
+    request: Request, q: str = "", top_k: int = 0, job: str = ""
+) -> HTMLResponse:
+    """知识库页面；q 做检索试验，job 表示正在跟踪的后台任务。
 
     刻意用同步 def：检索首次会加载本地模型（约 20s），走线程池不阻塞事件循环，
     否则 SSE 日志流与整站都会被卡住。
@@ -68,6 +70,12 @@ def knowledge_page(request: Request, q: str = "", top_k: int = 0) -> HTMLRespons
             results = payload.get("results", [])
         except Exception as exc:  # 检索失败只提示，不影响页面其余部分
             search_error = str(exc)
+
+    # 任务面板：显式 ?job= 优先（页面据此轮询），否则静态显示最近一次（不轮询）
+    found = tasks.get(job) if job else None
+    tracked = found.as_dict() if found else None
+    expired = bool(job) and found is None
+    last_job = tracked or next((j.as_dict() for j in tasks.recent(1)), None)
     return render(
         request,
         "knowledge.html",
@@ -75,7 +83,9 @@ def knowledge_page(request: Request, q: str = "", top_k: int = 0) -> HTMLRespons
             "active_page": "knowledge",
             "status": status,
             "sources": sources,
-            "jobs": [j.as_dict() for j in tasks.recent()],
+            "tracked_job": tracked,
+            "job_expired": expired,
+            "last_job": last_job,
             "query": q,
             "results": results,
             "search_error": search_error,

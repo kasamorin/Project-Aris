@@ -182,11 +182,13 @@ def test_ingest_search_remove_roundtrip(tmp_path: Path):
         updated = service.ingest([str(doc_path)])
         assert updated[0]["status"] == "updated"
 
-        hits = service.search("猫吃什么", limit=3)
-        assert hits["results"], "检索应有结果"
-        assert all(r["source_path"] == str(doc_path.resolve()) for r in hits["results"])
-        assert any(r["heading_path"] for r in hits["results"])
-        assert hits["results"][0]["distance"] >= 0
+        hits = service.search("猫吃什么", limit=5)
+        paths = [r["source_path"] for r in hits["results"]]
+        # 库里可能有别的文档（如用户投喂的资料），故只断言本文档命中了
+        assert str(doc_path.resolve()) in paths, hits["results"]
+        mine = [r for r in hits["results"] if r["source_path"] == str(doc_path.resolve())]
+        assert any(r["heading_path"] for r in mine)
+        assert mine[0]["distance"] >= 0
 
         sources = service.list_sources()
         assert any(s["source_path"] == str(doc_path.resolve()) for s in sources)
@@ -196,5 +198,5 @@ def test_ingest_search_remove_roundtrip(tmp_path: Path):
     assert not any(
         s["source_path"] == str(doc_path.resolve()) for s in service.list_sources()
     )
-    hits = service.search("猫吃什么", limit=3)
+    hits = service.search("猫吃什么", limit=5)
     assert not any(r["source_path"] == str(doc_path.resolve()) for r in hits["results"])

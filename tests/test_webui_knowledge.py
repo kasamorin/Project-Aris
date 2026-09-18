@@ -144,6 +144,43 @@ def test_webui_knowledge_page_renders(client) -> None:
     assert "检索试验" in r.text
 
 
+def test_job_panel_stops_polling_when_finished(client) -> None:
+    """回归：已结束的任务不得再轮询/刷新。
+
+    曾经用 sessionStorage 做"只刷新一次"的守门，但每次加载都会把它清掉，
+    于是「完成后 reload → 再判定完成 → 再 reload」无限循环。
+    """
+    from aris.webui import tasks
+
+    job = tasks.create("test", total=1)
+    tasks.run(job.id, lambda: [{"path": "a.md", "status": "added", "chunks": 2, "reason": ""}])
+
+    html = client.get("/knowledge", params={"job": job.id}).text
+
+    assert 'data-poll="false"' in html   # 服务端判定：不再轮询
+    assert "a.md" in html                # 结果静态渲染出来
+    assert "sessionStorage" not in html  # 旧守门写法已移除（正是死循环的根源）
+
+
+def test_job_panel_polls_while_running(client) -> None:
+    """任务仍在排队/进行中时才开启轮询。"""
+    from aris.webui import tasks
+
+    job = tasks.create("test", total=3)  # 未执行 → pending
+    html = client.get("/knowledge", params={"job": job.id}).text
+
+    assert 'data-poll="true"' in html
+    assert job.id in html
+
+
+def test_expired_job_is_reported_without_polling(client) -> None:
+    """URL 里的任务 id 已不存在（WebUI 重启过）时给提示，不进入轮询。"""
+    html = client.get("/knowledge", params={"job": "deadbeef0000"}).text
+
+    assert "任务已过期" in html
+    assert 'data-poll="true"' not in html
+
+
 @requires_pg
 def test_webui_upload_ingest_search_remove(client, monkeypatch) -> None:
     """上传 → 后台摄入 → 轮询到完成 → 列表出现 → 检索命中 → 移除后消失。"""
@@ -160,27 +197,31 @@ def test_webui_upload_ingest_search_remove(client, monkeypatch) -> None:
     assert job_url.startswith("/knowledge?job=")
     job_id = job_url.split("job=", 1)[1]
 
-    job = client.get(f"/knowledge/jobs/{job_id}").json()
-    assert job["status"] == "done", job
-    assert job["items"][0]["status"] == "added"
-    assert job["items"][0]["chunks"] >= 1
-
-    page = client.get("/knowledge")
-    assert "kb-webui.md" in page.text
-
-    hit = client.get("/knowledge", params={"q": "NAS 的 IP 是多少"})
-    assert "192.168.1.20" in hit.text
-    assert "距离" in hit.text
-
-    # 落盘位置在 data/knowledge 下（source_path 可引用）
     from aris.config import get_settings
 
-    saved = Path(get_settings().data_dir) / "knowledge" / "kb-webui.md"
-    assert saved.exists()
+    saved = (Path(get_settings().data_dir) / "knowledge" / "kb-webui.md").resolve()
+    try:
+        job = client.get(f"/knowledge/jobs/{job_id}").json()
+        assert job["status"] == "done", job
+        assert job["items"][0]["status"] == "added"
+        assert job["items"][0]["chunks"] >= 1
 
-    client.post("/knowledge/remove", data={"path": str(saved.resolve())})
+        page = client.get("/knowledge")
+        assert "kb-webui.md" in page.text
+
+        hit = client.get("/knowledge", params={"q": "NAS 的 IP 是多少"})
+        assert "192.168.1.20" in hit.text
+        assert "距离" in hit.text
+
+        assert saved.exists()  # 落盘位置在 data/knowledge 下（source_path 可引用）
+    finally:
+        # 失败也要清理，否则会把临时文档留在真实开发库里（踩过一次）
+        client.post("/knowledge/remove", data={"path": str(saved)})
+
     after = client.get("/knowledge")
-    assert "kb-webui.md" not in after.text
+    table_html = after.text.split("<!-- 文档列表 -->", 1)[1]
+    # 用完整路径比对：进度面板会静态显示"最近一次任务"，且库里可能还有同名文件
+    assert str(saved) not in table_html
 
 
 @requires_pg
