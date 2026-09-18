@@ -1,0 +1,14 @@
+# store 模块可调参数（优先级：代码内默认值 < 本文件）
+# 详见 developDoc/CONFIG.md（配置收口原则）与 developDoc/KNOWLEDGE-BASE.md
+
+# embedding 提供方："local" = 本地 Bekko a25m（384 维，需 uv sync --extra embedding）
+embedding_provider = "local"
+
+# 本地模型：HF 仓库 id，或 data/models/ 下的目录名（本地目录优先）
+local_model = "hotchpotch/bekko-embedding-v1-a25m"
+
+# 本地推理一次喂多少条（批量吞吐实测约 324 docs/s @25 条/批）
+batch_size = 16
+
+# Matryoshka 截断维度（取消注释可降到 256 维，省存储与检索开销）
+# truncate_dim = 256

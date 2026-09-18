@@ -23,7 +23,16 @@ def render(
     template_name: str,
     context: dict | None = None,
 ) -> HTMLResponse:
-    """渲染 Jinja2 模板并返回 HTMLResponse。"""
+    """渲染 Jinja2 模板并返回 HTMLResponse。
+
+    统一注入 ``auth_disabled``：无密码模式（见 auth.py）下模板据此隐藏登录/退出入口。
+    """
+    from .auth import is_password_configured
+
     template = _env.get_template(template_name)
-    html = template.render(request=request, **(context or {}))
+    html = template.render(
+        request=request,
+        auth_disabled=not is_password_configured(),
+        **(context or {}),
+    )
     return HTMLResponse(content=html)

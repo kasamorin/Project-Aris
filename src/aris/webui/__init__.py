@@ -23,6 +23,8 @@ def create_app() -> FastAPI:
     from aris.core.llm import fetch as _llm_fetch_svc  # noqa: F401  (llm.fetch.* / llm.retired.*)
     from aris.core.llm import manage as _llm_manage_svc  # noqa: F401  (llm.providers.*)
     from aris.behavior.skills import manager as _skills_svc  # noqa: F401  (skills.*)
+    import aris.knowledge  # noqa: F401  (knowledge.*)
+    import aris.store  # noqa: F401  (store.vector.count 等)
     _verify_bus_services()
 
     app = FastAPI(
@@ -52,11 +54,13 @@ def create_app() -> FastAPI:
 
     # 注册路由
     from .routes import dashboard, audit, providers, skills, config, logs, history
+    from .routes import knowledge as knowledge_route
 
     app.include_router(dashboard.router)
     app.include_router(audit.router)
     app.include_router(providers.router)
     app.include_router(skills.router)
+    app.include_router(knowledge_route.router)
     app.include_router(config.router)
     app.include_router(logs.router)
     app.include_router(history.router)
@@ -87,6 +91,14 @@ _REQUIRED_SERVICES = (
     "skills.create",
     "skills.save",
     "skills.delete",
+    "knowledge.ingest",
+    "knowledge.sources",
+    "knowledge.remove",
+    "knowledge.search",
+    "knowledge.reindex",
+    "knowledge.upload",
+    "knowledge.status",
+    "store.vector.count",
 )
 
 

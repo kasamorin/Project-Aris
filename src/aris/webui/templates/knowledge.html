@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}知识库 - Project-Aris{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-semibold">知识库</h2>
+    <div class="flex items-center gap-3 text-sm text-gray-500">
+        <span>文档 {{ status.docs }} · 块 {{ status.chunks }}</span>
+        <form method="post" action="/knowledge/reindex">
+            <button class="px-3 py-1.5 bg-gray-100 rounded-md hover:bg-gray-200">重建索引</button>
+        </form>
+    </div>
+</div>
+
+{% if not status.enabled %}
+<div class="bg-yellow-50 text-yellow-800 text-sm p-3 rounded mb-4">
+    知识库当前已关闭（<code>config/knowledge.toml</code> 的 <code>enabled = false</code>）：
+    上传与检索均不可用，已有数据仍在库中。
+</div>
+{% endif %}
+
+{% if status.error %}
+<div class="bg-red-50 text-red-700 text-sm p-3 rounded mb-4">状态查询失败：{{ status.error }}</div>
+{% endif %}
+
+<!-- 上传 -->
+<div class="bg-white rounded-lg shadow p-4 mb-6">
+    <h3 class="font-medium mb-2">上传资料</h3>
+    <form method="post" action="/knowledge/upload" enctype="multipart/form-data" class="flex items-center gap-3">
+        <input type="file" name="files" multiple accept="{{ upload_accept }}"
+               class="text-sm border border-gray-300 rounded-md p-1.5 flex-1"
+               {% if not status.enabled %}disabled{% endif %}>
+        <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                {% if not status.enabled %}disabled{% endif %}>上传并摄入</button>
+    </form>
+    <p class="text-xs text-gray-500 mt-2">
+        支持 md / txt / html；单文件上限 {{ (status.max_file_bytes // 1048576) or 0 }}MB，
+        单次最多 {{ status.max_files_per_upload }} 个；同名文件会覆盖并重建。
+        落盘目录：<code>{{ status.upload_dir }}</code>
+    </p>
+</div>
+
+<!-- 后台任务进度：带 ?job= 时轮询；否则只静态展示最近一次（不轮询，避免无谓刷新） -->
+{% set panel_job = tracked_job or last_job %}
+{% if panel_job or job_expired %}
+<div id="job-panel" class="bg-white rounded-lg shadow p-4 mb-6"
+     data-job-id="{{ tracked_job.id if tracked_job else '' }}"
+     data-poll="{{ 'true' if tracked_job and tracked_job.status in ('pending', 'running') else 'false' }}">
+    <h3 class="font-medium mb-2">
+        摄入进度
+        {% if not tracked_job %}<span class="text-xs text-gray-400">（最近一次）</span>{% endif %}
+    </h3>
+    {% if job_expired %}
+    <div class="text-sm text-yellow-700">任务已过期（WebUI 可能重启过），下面的列表已是最终状态。</div>
+    {% else %}
+    {% set labels = {'pending': '排队中', 'running': '进行中', 'done': '已完成', 'failed': '失败'} %}
+    <div id="job-summary" class="text-sm text-gray-600 mb-2">
+        状态：{{ labels.get(panel_job.status, panel_job.status) }}　进度：{{ panel_job.done }}/{{ panel_job.total }}{% if panel_job.error %}　错误：{{ panel_job.error }}{% endif %}
+    </div>
+    <div id="job-items" class="text-xs font-mono whitespace-pre-wrap text-gray-700">{% for item in panel_job["items"] %}{{ item.status }} {{ item.chunks }} 块  {{ item.path }}{% if item.reason %}  ({{ item.reason }}){% endif %}
+{% endfor %}</div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- 检索试验 -->
+<div class="bg-white rounded-lg shadow p-4 mb-6">
+    <h3 class="font-medium mb-2">检索试验</h3>
+    <form method="get" action="/knowledge" class="flex items-center gap-3">
+        <input type="text" name="q" value="{{ query }}" placeholder="输入一句话看看命中什么"
+               class="text-sm border border-gray-300 rounded-md p-2 flex-1">
+        <button class="px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200 text-sm">检索</button>
+    </form>
+    {% if search_error %}
+    <div class="bg-red-50 text-red-700 text-sm p-2 rounded mt-3">检索失败：{{ search_error }}</div>
+    {% endif %}
+    {% if results %}
+    <div class="mt-3 space-y-2">
+        {% for hit in results %}
+        <div class="border border-gray-100 rounded p-3">
+            <div class="text-xs text-gray-500 mb-1">
+                [{{ hit.id }}] {{ hit.source_path }}{% if hit.heading_path %} › {{ hit.heading_path }}{% endif %}
+                · 距离 {{ '%.3f'|format(hit.distance) }}
+            </div>
+            <div class="text-sm whitespace-pre-wrap">{{ hit.content[:400] }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% elif query and not search_error %}
+    <p class="text-sm text-gray-400 mt-3">没有命中（库里可能还没有内容）</p>
+    {% endif %}
+</div>
+
+<!-- 文档列表 -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500">
+            <tr>
+                <th class="text-left px-4 py-2 font-medium">来源</th>
+                <th class="text-left px-4 py-2 font-medium w-24">块数</th>
+                <th class="text-left px-4 py-2 font-medium w-28">大小</th>
+                <th class="text-left px-4 py-2 font-medium w-44">摄入时间</th>
+                <th class="w-20"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in sources %}
+            <tr class="border-t border-gray-100">
+                <td class="px-4 py-2">
+                    <div class="text-gray-800">{{ doc.title or '（无标题）' }}</div>
+                    <div class="text-xs text-gray-400">{{ doc.source_path }}</div>
+                </td>
+                <td class="px-4 py-2 text-gray-600">{{ doc.chunks }}</td>
+                <td class="px-4 py-2 text-gray-600">{{ doc.bytes }} B</td>
+                <td class="px-4 py-2 text-gray-500">{{ doc.ingested_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="px-4 py-2">
+                    <form method="post" action="/knowledge/remove">
+                        <input type="hidden" name="path" value="{{ doc.source_path }}">
+                        <button class="text-red-600 hover:underline text-sm"
+                                onclick="return confirm('确定移除该文档及其全部块？')">移除</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+                    知识库为空——上传资料，或用 <code>aris knowledge add &lt;路径&gt;</code>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+// 轮询只在「URL 里显式带 ?job= 且任务仍在跑」时发生（data-poll 由服务端判定）。
+// 终态一律用 location.replace('/knowledge') 收尾：URL 不带 job 参数 → 不会再进轮询/
+// 刷新分支，避免「完成后 reload → 再判定完成 → 再 reload」的死循环。
+const panel = document.getElementById('job-panel');
+const jobId = panel ? panel.dataset.jobId : '';
+const shouldPoll = panel ? panel.dataset.poll === 'true' : false;
+
+const LABELS = {pending: '排队中', running: '进行中', done: '已完成', failed: '失败',
+                unknown: '已过期（WebUI 重启过）'};
+
+function renderJob(job) {
+    document.getElementById('job-summary').textContent =
+        `状态：${LABELS[job.status] || job.status}　进度：${job.done}/${job.total}`
+        + (job.error ? `　错误：${job.error}` : '');
+    document.getElementById('job-items').textContent = (job.items || [])
+        .map(i => `${i.status} ${i.chunks} 块  ${i.path}${i.reason ? '  (' + i.reason + ')' : ''}`)
+        .join('\n');
+}
+
+async function pollJob() {
+    let job;
+    try {
+        job = await (await fetch(`/knowledge/jobs/${jobId}`)).json();
+    } catch (e) {
+        setTimeout(pollJob, 2000);   // 网络抖动：退一步再试，不刷新页面
+        return;
+    }
+    renderJob(job);
+    if (job.status === 'pending' || job.status === 'running') {
+        setTimeout(pollJob, 1000);
+        return;
+    }
+    location.replace('/knowledge');  // 终态/任务不存在：清掉 job 参数并刷新一次
+}
+
+if (shouldPoll && jobId) pollJob();
+</script>
+{% endblock %}

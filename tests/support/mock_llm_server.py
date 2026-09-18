@@ -13,6 +13,16 @@
 线程安全：每请求独立线程处理（ThreadingHTTPServer），错误序列与请求计数加锁。
 
 无场景注册的 (provider_id, model) 走默认场景（空文本、正常结束）。
+
+## 脚本序列（register_script）
+
+真实提供方只有一个且并发受限时，用脚本序列按请求序号驱动：同一
+(provider_id, model) 的第 N 次 HTTP 请求依次响应 scripts[N-1]，实现
+「第一次请求测一个功能、第二次请求测另一个功能……」的外围功能全覆盖，
+零真实 API 消耗、本地回环低延迟。
+
+每次 HTTP 请求（含同一逻辑轮内的重试/降级切换到下家产生的请求）都消耗
+一步脚本；脚本耗尽后回退到 register 的常规场景，再回退到默认空场景。
 """
 
 from __future__ import annotations
@@ -216,6 +226,7 @@ class MockLLMServer:
         self._httpd.mock = self
         self.lock = threading.Lock()
         self.scenarios: dict[tuple[str, str], Scenario] = {}
+        self.scripts: dict[tuple[str, str], list[Scenario]] = {}
         self.counts: dict[tuple[str, str], int] = {}
         self.models: dict[str, list[str]] = {}
         self.port = self._httpd.server_address[1]
@@ -240,6 +251,18 @@ class MockLLMServer:
         with self.lock:
             self.scenarios[(pid, model)] = scenario
 
+    def register_script(
+        self, scenarios: list[Scenario], *, pid: str, model: str
+    ) -> None:
+        """注册按请求序号依次响应的脚本序列。
+
+        同一 (pid, model) 的第 N 次 HTTP 请求响应 steps[N-1]；每次 HTTP
+        请求（含重试/降级产生的请求）推进一步，耗尽后回退到 register 的
+        常规场景，再回退到默认空场景。
+        """
+        with self.lock:
+            self.scripts[(pid, model)] = list(scenarios)
+
     def register_models(self, pid: str, models: list[str]) -> None:
         """注册某提供方 /models 返回的模型 id 列表。"""
         with self.lock:
@@ -251,8 +274,15 @@ class MockLLMServer:
 
     def scenario_for(self, pid: str, model: str) -> Scenario:
         with self.lock:
+            key = (pid, model)
+            script = self.scripts.get(key)
+            if script:
+                # do_POST 先取场景后计数 → 此时计数即「将要耗用的下一步脚标」
+                step = self.counts.get(key, 0)
+                if step < len(script):
+                    return script[step]
             return (
-                self.scenarios.get((pid, model))
+                self.scenarios.get(key)
                 or self.scenarios.get((pid, "*"))
                 or Scenario()
             )

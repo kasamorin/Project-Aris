@@ -20,11 +20,13 @@ from ..rate_limit import login_limiter
 router = APIRouter()
 
 
-@router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request) -> HTMLResponse:
-    """登录页面。"""
+@router.get("/login", response_class=HTMLResponse, response_model=None)
+async def login_page(request: Request) -> HTMLResponse | RedirectResponse:
+    """登录页面；无密码模式直接回首页（没有可登录的东西）。"""
     from ..templates import render
 
+    if not is_password_configured():
+        return RedirectResponse("/", status_code=302)
     return render(request, "login.html", {"error": None})
 
 
@@ -38,13 +40,9 @@ async def login_submit(
 
     client_ip = request.client.host if request.client else "unknown"
 
-    # 检查密码是否配置
+    # 无密码模式：不存在登录态，直接回首页
     if not is_password_configured():
-        return render(
-            request,
-            "login.html",
-            {"error": "未配置密码，请在 .env 中设置 ARIS_WEBUI_PASSWORD"},
-        )
+        return RedirectResponse("/", status_code=303)
 
     # 限流检查
     if login_limiter.is_locked(client_ip):
