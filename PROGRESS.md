@@ -6,6 +6,33 @@
 
 ## 最新状态
 
+### 2026-09-18：数据库部署方案定案（前置阻塞解除）
+
+- **结论**：数据库环境**不依赖系统安装**，由项目脚本按需自动获取便携实例，
+  目标「clone 下来就能用」。定案 **micromamba + conda-forge**（`postgresql` +
+  `pgvector` 同源，免 root、免编译、装到 `data/pg/`，`.gitignore` 已覆盖）。
+- 排除 EDB 官方 binaries tarball（实测 403，改走许可跳转，且不含 pgvector），
+  也排除二进制入仓（体积 200MB+，违反「数据不进 git」）。
+- 探针链：`ARIS_PG_BIN` → PATH 中 `pg_config`/`postgres` → `data/pg/` → 下载。
+  代码只认 DSN，不感知实例来源 → 该决策不影响议题 A/B/C/D。
+- **pgvector 取预编译包、不源码编译**：读源码确认 pgvector 在 glibc Linux 上自动启用
+  `USE_TARGET_CLONES`（运行期选 FMA 快路径）；本机 Xeon E5-2673 v3 无 AVX-512，
+  `-march=native` 无额外收益。
+- 已同步 `AGENTS.md`「已定案」；详 `developDoc/KNOWLEDGE-BASE.md` 第 3 节。
+- 未写代码，仅文档；下一步进议题 A（边界与归属）/ D（检索侧接口）。
+
+### 2026-09-14：知识库进入准备阶段（商讨中，未定案）
+
+- 用户决定启动**知识库**能力建设，定位为**面向外部资料的独立 RAG 知识检索
+  能力**，与 Aris 个人记忆分开。
+- 已开分支 `feat/knowledge-base`（从 `develop` @ `7f0b4dd` 拉取）。
+- 新建 `developDoc/KNOWLEDGE-BASE.md`（**商讨稿**）：登记定位、可沿用的既有
+  地基、前置阻塞、待商讨决策点（A 边界归属 / B 摄入侧 / C 存储切分 / D 检索侧）。
+- **尚未定案**：知识库与 `memory/`（记忆系统主线）的边界与先后次序均待商讨；
+  本轮只做准备，未写代码。
+- **前置阻塞（实机探测）**：本机 PostgreSQL / pgvector / docker / podman 均不存在，
+  数据库环境搭建方式待定。
+
 ### 2026-08-30：版本 v0.3.1（WebUI 安全审查 + 总线化改造 + 防复发机制收官）
 
 - 版本号三源同步 bump 至 **v0.3.1**（patch 级：本轮为修复/重构/工具，无新功能）。
@@ -85,5 +112,10 @@
 
 ## 当前聚焦
 
-**记忆系统**（PostgreSQL + pgvector）
+**知识库准备**（商讨中，2026-09-14 起）与**记忆系统**（PostgreSQL + pgvector）
+- 知识库：商讨稿见 `developDoc/KNOWLEDGE-BASE.md`，分支 `feat/knowledge-base`；
+  与记忆系统的边界、归属、次序均待商讨定案
+- 记忆系统：主线未取消，`memory/` 仍为占位；与知识库共享 PostgreSQL + pgvector 底层
+- 共同前置：数据库环境部署方式**已定案**（2026-09-18，micromamba + conda-forge
+  便携实例，脚本自动获取，见上文与 `developDoc/KNOWLEDGE-BASE.md` 第 3 节）
 - WebUI 管理后台已完成（v0.3.0，2026-08-23）

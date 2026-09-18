@@ -46,6 +46,11 @@
   鉴权绕过等安全漏洞全部修复；webui 全部路由改走 `core.call`（16 个总线服务 +
   启动自检）；新增 11 个关键路径测试（总计 48 通过）；pre-commit 分支保护 +
   `scripts/release-check.sh` 发布检查落地。详 `developDoc/SECURITY-AND-REFACTOR-PLAN.md`。
+- **知识库（Knowledge Base）进入准备阶段（2026-09-14）**：定位为**面向外部资料的
+  独立 RAG 知识检索能力**，与 Aris 个人记忆**分开**。分支 `feat/knowledge-base`，
+  商讨稿见 `developDoc/KNOWLEDGE-BASE.md`。**尚未定案**：与 `memory/` 的边界、
+  共享底层、先后次序均待商讨；本机 PostgreSQL / pgvector 尚不存在，但**部署方案已定案**
+  （2026-09-18，见「已定案」）。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -219,8 +224,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 开发路线
 
-> **当前聚焦：记忆系统**（PostgreSQL + pgvector）。WebUI 管理后台
-> 已完成（v0.3.0，2026-08-23），详见 `developDoc/WEBUI.md`。
+> **当前聚焦：知识库准备（商讨中，2026-09-14 起）与记忆系统**（PostgreSQL +
+> pgvector）。WebUI 管理后台已完成（v0.3.0，2026-08-23），详见 `developDoc/WEBUI.md`。
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
@@ -233,6 +238,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
    MCP / Skills 待后续；联网搜索已完成（Bing 直连 + Tavily 兜底）
 8. GraphRAG
+9. 知识库（独立 RAG 知识检索）—— **准备中（2026-09-14）**：定位为面向外部资料的
+   独立检索能力，与个人记忆分开。**与第 4 项（记忆系统）的边界、是否共享
+   embedding / pgvector 底层、先后次序均待商讨**，议题清单见
+   `developDoc/KNOWLEDGE-BASE.md`
 
 ## 已定案（直接照做，无需再确认）
 
@@ -257,6 +266,13 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   方便以后加 GraphRAG（Apache AGE vs 递归 CTE 到时再定）
 - **记忆实现方式**：走 RAG，但**不用现有框架**（LangChain/LlamaIndex 等），
   自研轻量实现；重量依赖安装方式（独立环境 / pyproject extras）实现时再定
+- **数据库部署（2026-09-18）**：**不要求用户预装系统 PostgreSQL**，目标「clone 就能用」。
+  由脚本按探针链（`ARIS_PG_BIN` → PATH 中 `pg_config`/`postgres` → 项目内
+  `data/pg/` → 皆无则下载）取用；获取方式定案 **micromamba + conda-forge**
+  （`postgresql` + `pgvector` 同源，免 root、免编译、装到 `data/pg/`，gitignore 覆盖）。
+  代码只认 DSN，不感知实例来源。**pgvector 取预编译包、不源码编译**：本机
+  Xeon E5-2673 v3 无 AVX-512，pgvector 的 `USE_TARGET_CLONES` 已在运行期给出
+  FMA 快路径，`-march=native` 无额外收益。详见 `developDoc/KNOWLEDGE-BASE.md` 第 3 节
 - **联网搜索（2026-08-09 定案；2026-08-12 精简；2026-08-14 改 Bing 主链路）**：
   **Bing 直连为主（www.bing.com，零成本无 key）+ Tavily API 兜底**
   （`TAVILY_API_KEY` 走 `.env`）。曾尝试 Playwright 驱动浏览器降级方案
@@ -306,6 +322,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   —— 交给 Aris（相当于「打断 + 继续听」）或丢弃并假装没听见（「装没听见」）。
   判断依据待定（如语气、上下文、用户意图）。实现前先定方案
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
+- **知识库与记忆系统的边界（未定，2026-09-14 起商讨）**：知识库定位为面向外部资料的
+  独立 RAG 知识检索能力，但代码归属（`memory/` 子层 vs 独立 `knowledge/` 模块）、
+  是否共享 embedding / pgvector 底层、与 skill 形态的关系、两者先后次序**均未定**。
+  商讨稿与议题清单见 `developDoc/KNOWLEDGE-BASE.md`，定案前不得照此实现
 - ~~测试框架是否启用 pytest~~（已定：2026-08-18 启用 pytest，见技术栈）
 
 ## 文档索引（按需阅读）
@@ -318,6 +338,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | 技能系统（`behavior.skills`） | `developDoc/SKILLS.md` |
 | 联网搜索方案（演进历史 / 留档） | `developDoc/WEB-SEARCH.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
+| 知识库（独立 RAG 知识检索，**商讨稿**） | `developDoc/KNOWLEDGE-BASE.md` |
 | LLM 提供商/模型管理（list/check/fetch/退休） | `developDoc/LLM-PROVIDER-MGMT.md` |
 | `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |
 | 插件系统（草案，含后续讨论） | `developDoc/PLUGIN.md` |
