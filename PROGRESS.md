@@ -24,6 +24,12 @@
   文件，HOME 只读时会刷 warning（数据不外发，属无害噪音；已设 opt-out 环境变量，
   彻底消除需在可写 HOME 下跑一次或写 consent 文件）；③ HF 缓存经 `HF_HOME` 收进
   `data/models/`，不散落主目录
+- 顺带修两处真实缺陷：① `is_running` 增 `pg_isready` 实测——崩溃后残留的
+  `postmaster.pid` 会让 `pg_ctl status` **误报"运行中"**，进而 `aris db start` 拒绝
+  启动（实测踩到）；② `bootstrap()` 更名 `bootstrap_env()`——函数与模块同名时被包内
+  重导出遮蔽，`store.bootstrap` 拿到的是函数而非模块（已连踩两次）
+- 内存实测：本地模型加载后进程峰值 RSS **约 1.2GB**，CLI 一次性命令退出即释放，
+  无残留常驻（长驻服务会常驻该量级，属预期）
 - 依赖新增（dependency-group）：sentence-transformers / `optimum[openvino]` / openvino /
   `transformers<5.1` / torch + torchvision（CPU）；`.venv` 约 1.5GB
 - **下一步**：`store/` 的迁移机制与向量检索 helper，然后进 `knowledge/`

@@ -100,6 +100,38 @@ def test_local_provider_metadata_without_deps(tmp_path):
     assert truncated.dimension == 256
 
 
+def test_is_running_requires_real_probe(tmp_path, monkeypatch):
+    """仅凭 pg_ctl status 不够：残留 pidfile 会让它误报，须由 pg_isready 实测。"""
+    import importlib
+
+    # 注意：store/__init__ 会重导出 bootstrap_env，故这里必须按模块路径取
+    bootstrap_mod = importlib.import_module("aris.store.bootstrap")
+    from aris.store.pgenv import detect
+
+    bin_dir = _fake_bin(tmp_path / "pg")
+    for name in ("pg_ctl", "pg_isready"):
+        (bin_dir / name).write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("ARIS_PG_BIN", str(bin_dir))
+    env = detect(tmp_path / "data")
+    (env.pgdata).mkdir(parents=True, exist_ok=True)
+    (env.pgdata / "PG_VERSION").write_text("17\n", encoding="utf-8")
+
+    codes = iter([0, 2])  # pg_ctl status=运行中，pg_isready=无响应
+
+    class _Result:
+        returncode = 0
+
+    def _fake_run(cmd, **_kwargs):
+        _Result.returncode = next(codes)
+        return _Result()
+
+    monkeypatch.setattr(bootstrap_mod.subprocess, "run", _fake_run)
+    assert bootstrap_mod.is_running(env) is False
+
+    codes = iter([0, 0])
+    assert bootstrap_mod.is_running(env) is True
+
+
 def test_store_services_registered():
     """store 模块 import 时自注册总线服务。"""
     import aris.store  # noqa: F401

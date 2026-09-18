@@ -149,7 +149,12 @@ def ensure_cluster(env: PgEnv) -> None:
 
 
 def is_running(env: PgEnv) -> bool:
-    """实例是否正在运行（未安装或未初始化一律视为未运行）。"""
+    """实例是否正在运行（未安装或未初始化一律视为未运行）。
+
+    只看 ``pg_ctl status`` 不够：崩溃后残留的 ``postmaster.pid``（PID 被复用、
+    或换了 PID 命名空间）会让它报"在运行"。故再用 ``pg_isready`` 真实探一次——
+    连接被拒即认定未运行，避免 ``aris db start`` 因此拒绝启动。
+    """
     if not env.installed or not (env.pgdata / "PG_VERSION").exists():
         return False
     proc = subprocess.run(
@@ -157,7 +162,14 @@ def is_running(env: PgEnv) -> bool:
         capture_output=True,
         text=True,
     )
-    return proc.returncode == 0
+    if proc.returncode != 0:
+        return False
+    ready = subprocess.run(
+        [str(env.tool("pg_isready")), "-h", str(env.run_dir), "-p", str(env.port)],
+        capture_output=True,
+        text=True,
+    )
+    return ready.returncode == 0
 
 
 def _log_tail(env: PgEnv, lines: int = 5) -> str:
@@ -245,11 +257,15 @@ def write_versions(env: PgEnv) -> Path:
     return target
 
 
-def bootstrap(env: PgEnv) -> PgEnv:
+def bootstrap_env(env: PgEnv) -> PgEnv:
     """一条龙：探测 → 装 micromamba → 装 PG + pgvector → initdb → 启动 → 建库。
 
     系统已装（``ARIS_PG_BIN`` / ``pg_config``）时**不下载**，只确保库与扩展存在。
     返回可能已刷新的 :class:`PgEnv`（刚装完便携实例时来源与 bin 目录会变）。
+
+    命名带 ``_env`` 后缀是刻意的：函数若与模块同名（``bootstrap``），
+    包内 ``from .bootstrap import bootstrap`` 会把它遮蔽成模块属性，
+    调用方 ``store.bootstrap`` 拿到的就不是模块了（已踩过）。
     """
     if env.source in (PgSource.ENV, PgSource.SYSTEM):
         logger.info(f"使用已有 PostgreSQL 实例（{env.bin_dir}），跳过下载")

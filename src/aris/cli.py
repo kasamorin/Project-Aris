@@ -584,8 +584,7 @@ def _cmd_db(args: argparse.Namespace) -> int:
     """数据库环境管理：init / start / stop / status / psql。"""
     import subprocess
 
-    from aris.store import BootstrapError, is_running, start, stop
-    from aris.store import bootstrap as run_bootstrap
+    from aris.store import BootstrapError, bootstrap_env, is_running, start, stop
     from aris.store.pgenv import detect
 
     env = detect()
@@ -593,7 +592,7 @@ def _cmd_db(args: argparse.Namespace) -> int:
 
     if action == "init":
         try:
-            env = run_bootstrap(env)
+            env = bootstrap_env(env)
         except BootstrapError as e:
             logger.error(str(e))
             return 1

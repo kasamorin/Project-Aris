@@ -22,7 +22,7 @@ from typing import Any
 from ..core import provide
 from .bootstrap import (
     BootstrapError,
-    bootstrap,
+    bootstrap_env,
     is_running,
     start,
     stop,
@@ -54,7 +54,7 @@ __all__ = [
     "PgEnv",
     "PgSource",
     "StoreConfig",
-    "bootstrap",
+    "bootstrap_env",
     "detect",
     "get_provider",
     "get_store_config",
