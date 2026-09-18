@@ -35,6 +35,12 @@
 
 - 主环境：Arch Linux（Wayland 桌面）——**默认开发环境**
 - 次环境：Termux（安卓），**仅用于没有电脑时改文档**；不运行代码，无需兼容
+- **本机注意（2026-09-18）**：KDE **Baloo** 默认索引整个 `$HOME`，批量 `uv sync` /
+  下载大文件后 `baloo_file_extractor` 会涨到数 GB 且长时间不退出（实测 3.4GB / 34min）。
+  已把 `$HOME/Codes/Project-Aris/data/` 与 `$HOME/.cache/` 加入
+  `~/.config/baloofilerc` 的 `exclude folders`；若再遇到内存飙升，先查
+  `balooctl6 status`，必要时 `balooctl6 config set contentIndexing no`（代价：KRunner
+  无法搜文件内容）
 
 ## 现状
 

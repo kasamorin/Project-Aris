@@ -30,6 +30,11 @@
   重导出遮蔽，`store.bootstrap` 拿到的是函数而非模块（已连踩两次）
 - 内存实测：本地模型加载后进程峰值 RSS **约 1.2GB**，CLI 一次性命令退出即释放，
   无残留常驻（长驻服务会常驻该量级，属预期）
+- 内存排查结论（2026-09-18）：Aris 自身**无常驻**（aris/python/postgres 进程数 0）；
+  这轮 ~4GB 写入把 KDE **Baloo** 的 `baloo_file_extractor` 顶到 3.4GB（内容索引期间
+  持续增长，杀掉后重启仍会再涨）。已排除 `data/` 与 `~/.cache/`（备份
+  `~/.config/baloofilerc.bak-20260918`）；彻底止血需 `contentIndexing no`，待用户定。
+  详见 AGENTS.md「开发环境」的本机注意
 - 依赖新增（dependency-group）：sentence-transformers / `optimum[openvino]` / openvino /
   `transformers<5.1` / torch + torchvision（CPU）；`.venv` 约 1.5GB
 - **下一步**：`store/` 的迁移机制与向量检索 helper，然后进 `knowledge/`
