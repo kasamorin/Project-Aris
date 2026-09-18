@@ -571,6 +571,145 @@ def _cmd_chat(args: argparse.Namespace) -> int:
     return session.repl()
 
 
+def _db_env_summary(env) -> str:
+    """数据库环境一行摘要（来源 / 可执行 / 数据目录 / 端口 / 库名）。"""
+    bin_dir = str(env.bin_dir) if env.bin_dir else "（未安装）"
+    return (
+        f"来源: {env.source} | 可执行: {bin_dir} | 数据目录: {env.pgdata} | "
+        f"端口: {env.port} | 库: {env.dbname}"
+    )
+
+
+def _cmd_db(args: argparse.Namespace) -> int:
+    """数据库环境管理：init / start / stop / status / psql。"""
+    import subprocess
+
+    from aris.store import BootstrapError, bootstrap_env, is_running, start, stop
+    from aris.store.pgenv import detect
+
+    env = detect()
+    action = args.db_command
+
+    if action == "init":
+        try:
+            env = bootstrap_env(env)
+        except BootstrapError as e:
+            logger.error(str(e))
+            return 1
+        print(_db_env_summary(env))
+        return 0
+
+    if action == "status":
+        print(_db_env_summary(env))
+        if not env.installed:
+            logger.warning("PostgreSQL 未安装——运行 aris db init 自动获取便携实例")
+            return 1
+        running = is_running(env)
+        print(f"运行状态: {'运行中' if running else '已停止'}")
+        if running and not args.no_probe:
+            try:
+                from aris.store.db import health
+
+                info = health(env)
+            except Exception as e:  # 探活失败只提示，不改 status 的退出码语义
+                logger.warning(f"连接失败: {e}")
+            else:
+                vector = info["vector_version"] or "未安装"
+                print(f"服务端: PostgreSQL {info['server_version']} | pgvector: {vector}")
+        return 0
+
+    if not env.installed:
+        logger.error("PostgreSQL 未安装，请先运行 aris db init")
+        return 1
+
+    if action == "start":
+        logger.info("数据库已启动" if start(env) else "数据库已在运行")
+        return 0
+
+    if action == "stop":
+        logger.info("数据库已停止" if stop(env) else "数据库本就未运行")
+        return 0
+
+    if action == "migrate":
+        from contextlib import closing
+
+        from aris.store.db import connect
+        from aris.store.migrate import MigrationError, run as run_migrations
+
+        if not is_running(env):
+            logger.error("数据库未运行，先执行 aris db start")
+            return 1
+        try:
+            with closing(connect(env)) as conn:
+                done = run_migrations(conn)
+        except MigrationError as e:
+            logger.error(str(e))
+            return 1
+        done_sql = f"：{', '.join(done)}" if done else ""
+        print(f"本次应用 {len(done)} 条迁移{done_sql}")
+        return 0
+
+    if action == "psql":
+        return subprocess.call([str(env.tool("psql")), *args.psql_args], env=env.tool_env())
+
+    logger.error(f"未知的 db 子命令: {action}")
+    return 1
+
+
+def _cmd_store(args: argparse.Namespace) -> int:
+    """store 模块调试命令：info（配置 + 自检）/ embed（编码文本）。"""
+    from aris.store.conf import get_store_config
+    from aris.store.embedding import EmbeddingError, get_provider
+
+    cfg = get_store_config()
+
+    if args.store_command == "info":
+        print(
+            f"provider: {cfg.embedding_provider} | model: {cfg.local_model} | "
+            f"batch: {cfg.batch_size} | truncate: {cfg.truncate_dim or '-'}"
+        )
+        provider = get_provider()
+        print(f"维度: {provider.dimension}")
+        try:
+            vectors = provider.embed(["维度探针"])
+        except EmbeddingError as e:
+            logger.error(str(e))
+            return 1
+        print(f"自检: 通过（返回 {len(vectors[0])} 维向量）")
+        return 0
+
+    texts = list(args.text)
+    if not texts and not sys.stdin.isatty():
+        texts = [line for line in sys.stdin.read().splitlines() if line.strip()]
+    if not texts:
+        logger.error("没有可编码的文本：给参数，或从 stdin 逐行传入")
+        return 1
+
+    try:
+        vectors = get_provider().embed(texts)
+    except EmbeddingError as e:
+        logger.error(str(e))
+        return 1
+    for text, vec in zip(texts, vectors, strict=True):
+        preview = ", ".join(f"{v:+.4f}" for v in vec[:5])
+        print(f"{len(vec)} 维 | {preview} ... | {text[:40]}")
+    return 0
+
+
+def _extract_psql_passthrough(argv: list[str]) -> tuple[list[str], list[str]]:
+    """摘出 `aris db psql` 之后的参数（原样透传，不参与 argparse）。
+
+    argparse 的 REMAINDER 遇到 `-c` 这类以短横线开头的参数会报
+    "unrecognized arguments"，故在解析前手工切分。
+    """
+    if len(argv) >= 2 and argv[0] == "db" and argv[1] == "psql":
+        rest = argv[2:]
+        if rest and rest[0] == "--":  # 允许 aris db psql -- -c "..."
+            rest = rest[1:]
+        return argv[:2], rest
+    return argv, []
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI 主入口。"""
     parser = argparse.ArgumentParser(
@@ -671,10 +810,45 @@ def main(argv: list[str] | None = None) -> int:
     p_web.add_argument("--port", default=None, type=int, help="监听端口（默认 9690）")
     p_web.set_defaults(func=_cmd_web)
 
-    args = parser.parse_args(argv)
+    p_db = sub.add_parser("db", help="数据库环境管理（便携 PostgreSQL + pgvector）")
+    p_db_sub = p_db.add_subparsers(dest="db_command")
+    p_db_init = p_db_sub.add_parser("init", help="获取/初始化数据库环境（幂等）")
+    p_db_init.set_defaults(func=_cmd_db)
+    p_db_start = p_db_sub.add_parser("start", help="启动数据库服务")
+    p_db_start.set_defaults(func=_cmd_db)
+    p_db_stop = p_db_sub.add_parser("stop", help="停止数据库服务")
+    p_db_stop.set_defaults(func=_cmd_db)
+    p_db_status = p_db_sub.add_parser("status", help="查看环境与运行状态")
+    p_db_status.add_argument("--no-probe", action="store_true", help="跳过连接探活")
+    p_db_status.set_defaults(func=_cmd_db)
+    p_db_migrate = p_db_sub.add_parser("migrate", help="应用待执行的 schema 迁移")
+    p_db_migrate.set_defaults(func=_cmd_db)
+    p_db_psql = p_db_sub.add_parser("psql", help="进入 psql（后续参数原样透传）")
+    p_db_psql.set_defaults(func=_cmd_db, psql_args=[])
+
+    p_store = sub.add_parser("store", help="存储/向量基础设施（embedding 调试）")
+    p_store_sub = p_store.add_subparsers(dest="store_command")
+    p_store_info = p_store_sub.add_parser("info", help="打印 embedding 配置并做一次自检")
+    p_store_info.set_defaults(func=_cmd_store)
+    p_store_embed = p_store_sub.add_parser(
+        "embed", help="编码文本并打印维度与向量片段（不给参数则从 stdin 逐行读）"
+    )
+    p_store_embed.add_argument("text", nargs="*", help="待编码文本")
+    p_store_embed.set_defaults(func=_cmd_store)
+
+    # `db psql` 之后的参数不参与 argparse（-c 这类选项会被误判），解析前先摘出
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    parse_argv, psql_args = _extract_psql_passthrough(raw_argv)
+    args = parser.parse_args(parse_argv)
+    if psql_args:
+        args.psql_args = psql_args
     settings = get_settings()
-    # doctor 是环境自检命令，始终显示 INFO 级别以便查看检查结果
-    console_level = "INFO" if (args.verbose or args.command == "doctor") else None
+    # doctor / db / store 是环境与调试命令，始终显示 INFO 级别以便查看进度与结果
+    console_level = (
+        "INFO"
+        if (args.verbose or args.command in ("doctor", "db", "store"))
+        else None
+    )
     # chat 命令默认不向控制台输出日志——全屏 TUI 由 prompt_toolkit 接管终端，
     # loguru 直接写 stderr 会破坏渲染（spinner 残留、界面错位）；日志仍写文件。
     # --verbose 可强制开启，用于联调排查。
@@ -690,8 +864,19 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
 
+    # 注册模块级总线服务（各模块在 import 时自注册；此处只挂轻量模块）
+    import aris.store  # noqa: F401  —— 注册 store.health 等
+
     if args.command == "llm" and args.llm_command is None:
         p_llm.print_help()
+        return 0
+
+    if args.command == "db" and args.db_command is None:
+        p_db.print_help()
+        return 0
+
+    if args.command == "store" and args.store_command is None:
+        p_store.print_help()
         return 0
 
     return args.func(args)

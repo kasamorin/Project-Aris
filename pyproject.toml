@@ -17,14 +17,41 @@ dependencies = [
     "uvicorn>=0.52.4",
     "jinja2>=3.1.6",
     "python-multipart>=0.0.32",
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
 ]
 
 [project.scripts]
 aris = "aris.cli:main"
 
+[tool.uv.sources]
+# torch / torchvision 在 Linux 默认拉 CUDA wheel（本机无 NVIDIA GPU，纯浪费体积），
+# 且两者必须同源同版本，否则 torchvision::nms 算子缺失导致 transformers 导入失败
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 # 开发依赖（uv sync 默认安装 dev group；测试运行：uv run pytest）
 [dependency-groups]
 dev = ["pytest>=8"]
+# 本地 embedding（重依赖，见 developDoc/EMBEDDING.md）：默认安装，
+# 想要轻量环境可用 `uv sync --no-default-groups`
+embedding = [
+    "sentence-transformers>=5",
+    "optimum[openvino]>=1.20",
+    "openvino>=2025",
+    "transformers<5.1",
+    "torch",
+    "torchvision",
+]
+
+[tool.uv]
+# 默认把 embedding 组也装上：避免「uv run 隐式把重依赖卸掉」的坑
+default-groups = ["dev", "embedding"]
 
 [build-system]
 requires = ["setuptools>=68"]
