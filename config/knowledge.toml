@@ -16,3 +16,8 @@ ef_search = 40
 # HNSW 建索引参数（先导数据、后建索引）
 index_m = 16
 index_ef_construction = 64
+
+# WebUI 上传：落盘目录（空 = data/knowledge/，同名文件覆盖）
+upload_dir = ""
+max_file_bytes = 10485760   # 单文件 10MB
+max_files_per_upload = 50

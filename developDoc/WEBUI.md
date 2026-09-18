@@ -86,6 +86,7 @@ CLI：`aris web --host 0.0.0.0 --port 9690`；host / port / session 天数进
 | 审计流水 | `/audit` | 查询/筛选审计记录（按时间/模块/操作）、分页 | **部分实时**（SSE 日志流） |
 | 提供商管理 | `/providers` | 提供方增删、模型列表、fetch 对比勾选写回、退休管理 | 按需刷新 |
 | 技能管理 | `/skills` | 技能卡片列表、创建/编辑/删除 SKILL.md、查看全文（Markdown 渲染） | 按需刷新 |
+| 知识库 | `/knowledge` | 上传资料（后台摄入 + 轮询进度）、文档列表与移除、检索试验、重建索引 | **部分实时**（轮询任务进度） |
 | 配置管理 | `/config` | 查看/编辑 config/*.toml（表单）、.env 状态（只读） | 按需刷新 |
 | 日志查看 | `/logs` | 历史日志文件浏览 + 实时日志流 | **部分实时**（SSE 日志流） |
 | 对话历史 | `/history` | **占位页**（后续实现，待会话重新定义后补充） | — |
@@ -125,6 +126,21 @@ CLI：`aris web --host 0.0.0.0 --port 9690`；host / port / session 天数进
   - 编辑模式：textarea 在线编辑 + marked.js 实时预览，保存写回文件
   - 删除按钮（二次确认）
 - 创建按钮：弹窗填 name / description，自动生成 SKILL.md 骨架并创建目录
+
+### 知识库 `/knowledge`（2026-09-18 落地）
+
+- **上传**：多文件（md / txt / html），**落盘到 `data/knowledge/`（同名覆盖）**，
+  再走 `knowledge.ingest` 摄入；落盘是为了让 `source_path` 稳定可引用、可重摄
+- **后台摄入 + 轮询**：摄入要跑本地 embedding（CPU 密集），故路由只登记任务
+  （`webui/tasks.py`，内存态、保留最近 20 条）并由 FastAPI BackgroundTasks 执行，
+  页面每秒 `GET /knowledge/jobs/{id}` 拉进度，完成后自动刷新
+- **文档列表**：来源路径 / 标题 / 块数 / 大小 / 摄入时间 + 移除（软删）
+- **检索试验**：页面内直接检索，显示来源路径、标题层级与**距离**（用于判断质量）
+- **重建索引**：`knowledge.reindex`（HNSW，幂等）
+- 限额与目录由 `config/knowledge.toml` 控制（`max_file_bytes` / `max_files_per_upload`
+  / `upload_dir`）；文件名只取 basename + 后缀白名单 + 落盘前再校验父目录（防穿越）
+- 检索路由刻意用**同步 def**：首次检索要加载本地模型（约 20s），走线程池避免阻塞
+  单 worker 的事件循环（否则 SSE 日志流与整站都会被卡住）
 
 ### 配置管理 `/config`
 

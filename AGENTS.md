@@ -49,7 +49,7 @@
 - 当前版本 **v0.3.1**（2026-08-30）。
 - 骨架、LLM 接入、文字对话、行为扩展（函数调用）、联网搜索、人格系统均已完成。
 - WebUI 管理后台已完成（2026-08-23）：登录鉴权、仪表盘、审计、提供商管理、
-  技能管理、配置管理、日志查看。
+  技能管理、配置管理、日志查看；**知识库管理页 `/knowledge` 已补（2026-09-18）**。
 - **WebUI 安全审查与总线化改造已完成（2026-08-30）**：路径穿越/TOML 注入/XSS/
   鉴权绕过等安全漏洞全部修复；webui 全部路由改走 `core.call`（16 个总线服务 +
   启动自检）；新增 11 个关键路径测试（总计 48 通过）；pre-commit 分支保护 +
@@ -64,7 +64,8 @@
   迁移 + 向量检索 helper）已齐**。
 - **知识库首期可用（2026-09-18）**：`knowledge/` 两表 + 分块 + 摄入 + 检索全链路跑通，
   CLI `aris knowledge add|list|remove|search|reindex`；agent 工具 `knowledge_search`
-  已接入并用脚本化 mock 验证工具往返；WebUI 上传待后续。
+  已接入并用脚本化 mock 验证工具往返；**WebUI 知识库页 `/knowledge` 也已落地**
+  （上传 → 后台摄入 → 轮询进度 → 列表/移除/检索试验/重建索引）。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -241,7 +242,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   - 已实现（续）：agent 工具 `knowledge_search`（D1：与 `web_search` 并列、
     **Aris 自主调用**，不做每轮自动注入；返回外层 JSON + 内部 markdown，
     每条带来源路径、标题层级与距离）
-  - 待实现：WebUI 上传（B3 二阶段）
+  - 已实现（续二）：WebUI 知识库页 `/knowledge`（上传落盘 `data/knowledge/` +
+    后台摄入 + 轮询进度、文档列表与移除、检索试验、重建索引）
+  - 待实现：PDF 与混合检索（第二阶段）
   详见 `developDoc/KNOWLEDGE-BASE.md`
 - `voice/` —— STT（语音识别）、TTS（语音合成）
 - `persona/` —— 人格系统（提示词工程起步，2026-08-12）：注册

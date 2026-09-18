@@ -31,6 +31,11 @@ class KnowledgeConfig:
     # HNSW 建索引参数（先用 pgvector 默认值，数据量上来再调）
     index_m: int = 16
     index_ef_construction: int = 64
+    # 上传（WebUI）落盘目录：空 = <data_dir>/knowledge；上传文件同名覆盖
+    upload_dir: str = ""
+    # 单文件体积上限（字节）与单次上传文件数上限
+    max_file_bytes: int = 10 * 1024 * 1024
+    max_files_per_upload: int = 50
 
 
 @lru_cache

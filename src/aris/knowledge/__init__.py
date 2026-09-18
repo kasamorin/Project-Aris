@@ -30,6 +30,8 @@ provide("knowledge.sources", _service.list_sources)
 provide("knowledge.remove", _service.remove)
 provide("knowledge.search", _service.search)
 provide("knowledge.reindex", _service.ensure_index)
+provide("knowledge.upload", _service.upload)
+provide("knowledge.status", _service.status)
 
 __all__ = [
     "KnowledgeConfig",

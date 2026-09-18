@@ -122,6 +122,15 @@ def _vector_dimension(table: str, column: str = "embedding") -> int | None:
         return table_dimension(conn, table, column)
 
 
+def _vector_count(table: str, **options: Any) -> int:
+    """总线服务：统计行数（options 见 store.vector.count，如 where/params）。"""
+    from .db import connect
+    from .vector import count
+
+    with closing(connect()) as conn:
+        return count(conn, table, **options)
+
+
 provide("store.health", _health)
 provide("store.embed", _embed)
 provide("store.embed_dimension", _embed_dimension)
@@ -132,6 +141,7 @@ provide("store.vector.search", _vector_search)
 provide("store.vector.upsert", _vector_upsert)
 provide("store.vector.ensure_index", _vector_ensure_index)
 provide("store.vector.dimension", _vector_dimension)
+provide("store.vector.count", _vector_count)
 
 __all__ = [
     "BootstrapError",

@@ -71,19 +71,19 @@ class _FakeConn:
 def test_migration_runner_applies_in_version_order_and_is_idempotent():
     """乱序登记也按版本执行；重复运行不再应用（幂等）。
 
-    登记表是模块级全局的（其他用例也会登记），故这里只看本用例 owner 的部分。
+    用 ``migrations=`` 显式传入，避免往全局登记表塞测试迁移（否则同进程后续
+    用例的 drift 校验会被带偏）。
     """
     executed: list[str] = []
     first = Migration("test_order", 1, "first", lambda _c: executed.append("v1"))
     second = Migration("test_order", 2, "second", lambda _c: executed.append("v2"))
-    migrate.register([second, first])  # 故意乱序登记
+    migrations = [second, first]  # 故意乱序
 
     conn = _FakeConn()
-    mine = lambda ids: [i for i in ids if i.startswith("test_order")]  # noqa: E731
-    assert mine(migrate.run(conn)) == ["test_order:001", "test_order:002"]
+    assert migrate.run(conn, migrations=migrations) == ["test_order:001", "test_order:002"]
     assert executed == ["v1", "v2"]
-    assert mine(migrate.run(conn)) == []
-    assert mine(migrate.pending_ids(conn)) == []
+    assert migrate.run(conn, migrations=migrations) == []
+    assert migrate.pending_ids(conn, migrations=migrations) == []
 
 
 def test_migration_failure_is_not_recorded():
@@ -92,30 +92,27 @@ def test_migration_failure_is_not_recorded():
     def boom(_conn: object) -> None:
         raise RuntimeError("DDL 出错")
 
-    migrate.register(Migration("test_fail", 1, "boom", boom))
+    migrations = [Migration("test_fail", 1, "boom", boom)]
     conn = _FakeConn()
     with pytest.raises(MigrationError):
-        migrate.run(conn)
+        migrate.run(conn, migrations=migrations)
     assert ("test_fail", 1) not in conn.applied
 
 
 def test_migration_drift_detected():
     """已应用的迁移被改名 → 快速失败（防止 schema 漂移）。"""
-    migrate.register(Migration("test_drift", 1, "original", lambda _c: None))
     conn = _FakeConn()
-    conn.applied[("test_drift", 1)] = "original"  # 直接伪造"已应用"，不依赖 run()
+    conn.applied[("test_drift", 1)] = "original"  # 伪造"已应用"
 
-    migrate.register(Migration("test_drift", 1, "renamed", lambda _c: None))
+    renamed = [Migration("test_drift", 1, "renamed", lambda _c: None)]
     with pytest.raises(MigrationError):
-        migrate.pending_ids(conn)
+        migrate.pending_ids(conn, migrations=renamed)
 
 
-def test_migrations_have_unique_versions_per_owner():
-    """真实模块登记的迁移版本号不重复（用例自身的 owner 以 test_ 开头，排除）。"""
+def test_real_migrations_have_unique_versions_per_owner():
+    """真实模块登记的迁移版本号不重复（测试迁移走 migrations= 传参，不进全局表）。"""
     seen: set[tuple[str, int]] = set()
     for m in migrate.all_migrations():
-        if m.owner.startswith("test_"):
-            continue
         assert (m.owner, m.version) not in seen, f"重复版本 {m.id}"
         seen.add((m.owner, m.version))
 

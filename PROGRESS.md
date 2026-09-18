@@ -6,6 +6,30 @@
 
 ## 最新状态
 
+### 2026-09-18：WebUI 知识库页（上传 → 后台摄入 → 轮询 → 检索试验）
+
+- 方案（用户拍定）：**上传落盘 `data/knowledge/`（同名覆盖）**、**后台任务 + 状态查询**、
+  **轮询进度**、实测先用 mock
+- `knowledge/` 侧：新增 `safe_filename()`（取 basename + 替换分隔符/控制字符，
+  落盘前再校验父目录，防穿越）、`KnowledgeService.upload()`（限额校验 → 落盘 →
+  复用 ingest，坏文件逐条降级为 failed）、`status()`（开关 / 上传限额 / 文档与块计数）；
+  新总线服务 `knowledge.upload` / `knowledge.status`，store 补 `store.vector.count`
+- WebUI 侧：新增路由 `/knowledge`（页面）/ `/knowledge/upload` / `/knowledge/jobs/{id}`
+  （轮询 JSON）/ `/knowledge/remove` / `/knowledge/reindex`，模板 `knowledge.html`，
+  导航加「📚 知识库」，`_REQUIRED_SERVICES` 补 8 项
+- 后台任务登记表 `webui/tasks.py`（内存态、保留最近 20 条、异常收敛为 failed）：
+  摄入要跑本地 embedding（CPU 密集），不能在请求里同步跑，否则单 worker 整站被拖住
+- 检索路由刻意用**同步 def**：首次检索要加载本地模型（约 20s），走线程池不阻塞事件循环
+- 修一处测试污染：迁移 drift 用例往**全局登记表**塞重名版本，导致同进程后续所有迁移
+  被判漂移（WebUI 上传随即 failed）。给 `migrate.run/pending` 加 `migrations=` 显式传参，
+  测试改用局部列表，全局表只放真实迁移
+- 实测：`uv run pytest` **93 passed**（含 WebUI 上传→列表→检索→移除、以及
+  「WebUI 上传 → Aris 自主 knowledge_search 作答」的 mock 全链路）；
+  另起真实 `aris web` 服务验证：登录 303、`/knowledge` 页面元素齐全、导航含知识库、
+  启动日志无总线服务缺失
+- **下一步**：真 API 实测（问一个投喂过的问题看 Aris 是否主动查库）；
+  之后 PDF / 混合检索（第二阶段）或转记忆系统
+
 ### 2026-09-18：agent 工具 `knowledge_search`（脚本化 mock 验证工具往返）
 
 - 新增 `behavior/tools/knowledge_search.py` 并接入内置工具集：D1 定案落地——

@@ -10,6 +10,7 @@ embedding 与数据库（跨模块不允许直接 import，见 AGENTS.md「模�
 from __future__ import annotations
 
 import hashlib
+import re
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,7 +21,7 @@ from loguru import logger
 from ..core import call
 from .chunking import chunk_document
 from .conf import KnowledgeConfig, get_knowledge_config
-from .loaders import LoadError, iter_files, load_document
+from .loaders import SUPPORTED_SUFFIXES, LoadError, iter_files, load_document
 from .migrations import CHUNKS_TABLE, DOCS_TABLE
 
 STATUS_ADDED = "added"
@@ -28,9 +29,28 @@ STATUS_UPDATED = "updated"
 STATUS_SKIPPED = "skipped"
 STATUS_FAILED = "failed"
 
+# 文件名里不允许出现的字符（路径分隔符与控制字符）
+_FILENAME_UNSAFE = re.compile(r"[\\/\x00-\x1f]")
+MAX_FILENAME_CHARS = 200
+
 
 class KnowledgeError(RuntimeError):
     """知识库业务错误（未启用 / 维度不符 / 参数非法）。"""
+
+
+def safe_filename(raw: str) -> str:
+    """把上传文件名收敛成安全的落盘名（只保留基名）。
+
+    防穿越三道：① 取 basename，去掉任何目录部分；② 替换剩余分隔符与控制字符；
+    ③ 调用方落盘前再确认目标路径确实在目标目录内（纵深防御）。
+    """
+    name = Path(str(raw or "")).name
+    name = _FILENAME_UNSAFE.sub("_", name).strip()
+    if not name or name in {".", ".."}:
+        raise KnowledgeError(f"非法的文件名：{raw!r}")
+    if len(name) > MAX_FILENAME_CHARS:
+        raise KnowledgeError(f"文件名过长（>{MAX_FILENAME_CHARS} 字符）：{name[:40]}…")
+    return name
 
 
 @dataclass(frozen=True)
@@ -199,6 +219,91 @@ class KnowledgeService:
         status = STATUS_UPDATED if existing else STATUS_ADDED
         logger.info(f"{status}：{source_path}（{len(chunks)} 块）")
         return IngestOutcome(source_path, status, len(chunks))
+
+    # ------------------------------------------------------------------
+    # 上传（WebUI）
+    # ------------------------------------------------------------------
+
+    def upload_root(self) -> Path:
+        """上传文件的落盘目录（配置为空时用 ``<data_dir>/knowledge``）。"""
+        if self._config.upload_dir:
+            return Path(self._config.upload_dir).expanduser().resolve()
+        from ..config import get_settings
+
+        return Path(get_settings().data_dir).resolve() / "knowledge"
+
+    def upload(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """保存上传文件并摄入（同名覆盖）。
+
+        ``items``：``[{"filename": str, "data": bytes}]``。落盘是为了让
+        ``source_path`` 稳定可引用、可重摄（见 KNOWLEDGE-BASE.md 的 B3 决定）。
+        单个文件的问题不拖垮整批：失败项以 ``status=failed`` 返回。
+        """
+        if not self._config.enabled:
+            raise KnowledgeError(
+                "知识库已关闭（config/knowledge.toml 的 enabled=false），上传被拒绝"
+            )
+        if not items:
+            raise KnowledgeError("没有收到文件")
+        if len(items) > self._config.max_files_per_upload:
+            raise KnowledgeError(
+                f"单次最多 {self._config.max_files_per_upload} 个文件，收到 {len(items)} 个"
+            )
+
+        root = self.upload_root()
+        root.mkdir(parents=True, exist_ok=True)
+        saved: list[str] = []
+        failures: list[dict[str, Any]] = []
+        limit_mb = self._config.max_file_bytes // (1024 * 1024)
+
+        for item in items:
+            raw_name = str(item.get("filename", ""))
+            data = item.get("data") or b""
+            try:
+                name = safe_filename(raw_name)
+                if Path(name).suffix.lower() not in SUPPORTED_SUFFIXES:
+                    supported = "，".join(sorted(SUPPORTED_SUFFIXES))
+                    raise KnowledgeError(f"不支持的格式：{name}（支持 {supported}）")
+                if not data:
+                    raise KnowledgeError(f"文件为空：{name}")
+                if len(data) > self._config.max_file_bytes:
+                    raise KnowledgeError(f"文件超过 {limit_mb}MB 上限：{name}")
+
+                target = (root / name).resolve()
+                if target.parent != root:  # 纵深防御：basename 之后仍再确认一次
+                    raise KnowledgeError(f"非法落盘路径：{name}")
+                target.write_bytes(data)
+                saved.append(str(target))
+            except (KnowledgeError, OSError) as exc:
+                logger.warning(f"上传失败 {raw_name}：{exc}")
+                failures.append(
+                    IngestOutcome(raw_name, STATUS_FAILED, 0, reason=str(exc)).as_dict()
+                )
+
+        return (self.ingest(saved) if saved else []) + failures
+
+    def status(self) -> dict[str, Any]:
+        """给管理后台用的状态摘要（开关 / 上传限制 / 文档与块计数）。"""
+        info: dict[str, Any] = {
+            "enabled": self._config.enabled,
+            "upload_dir": str(self.upload_root()),
+            "max_file_bytes": self._config.max_file_bytes,
+            "max_files_per_upload": self._config.max_files_per_upload,
+            "top_k": self._config.top_k,
+            "docs": 0,
+            "chunks": 0,
+            "error": "",
+        }
+        try:
+            self.ensure_schema()
+            info["docs"] = len(self.list_sources())
+            info["chunks"] = int(
+                call("store.vector.count", CHUNKS_TABLE, where="deleted_at IS NULL")
+            )
+        except Exception as exc:  # 状态查询不该因数据库未就绪而让页面 500
+            logger.warning(f"知识库状态查询失败：{exc}")
+            info["error"] = str(exc)
+        return info
 
     # ------------------------------------------------------------------
     # 列举 / 移除
