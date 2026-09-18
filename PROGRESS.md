@@ -6,6 +6,29 @@
 
 ## 最新状态
 
+### 2026-09-18：store/ 环境地基跑通（`aris db` 可用）
+
+- 新增 `store/` 模块：
+  - `pgenv.py`：探针链（`ARIS_PG_BIN` → PATH 的 `pg_config` → `data/pg` → 未安装）
+    + `PgEnv`（bin / pgdata / run / port / user / db）+ DSN 拼装（`ARIS_PG_DSN` 可整条覆盖）
+  - `bootstrap.py`：micromamba（固定版本 + sha256 校验）→ conda-forge 装 postgresql +
+    pgvector → `initdb`（UTF8、trust、仅监听 127.0.0.1）→ 启停 → 建库 →
+    `CREATE EXTENSION vector` → 写 `data/pg/versions.txt`；全流程幂等
+  - `db.py`：psycopg 连接与探活；对外总线服务 `store.health`
+- CLI：`aris db init|start|stop|status|psql`（psql 后续参数原样透传）
+- 实测：**PostgreSQL 17.11 + pgvector 0.8.1**；`data/pg` 约 166MB，另有包缓存
+  `data/pg-pkgs` 约 91MB（可随时删）；首次下载实测约 **40MB**（原估 300MB 偏保守）；
+  `uv run pytest` **51 passed**
+- 踩坑记录（已修）：① `pg_ctl -o "-k <相对路径>"` 必然失败——postgres 启动后会
+  chdir 到数据目录，故 `PgEnv` 内路径统一转绝对路径；② conda 默认把包缓存、元数据与
+  `~/.conda/environments.txt` 写到主目录，已用 `MAMBA_ROOT_PREFIX` / `CONDA_PKGS_DIRS`
+  / `XDG_CACHE_HOME` / `HOME` 全部收进 `data/`；③ `pg_ctl` 失败信息太少，已在
+  `bootstrap.start()` 附带服务日志末尾
+- 新增依赖 `psycopg[binary]`；文档同步（KNOWLEDGE-BASE 第 3.3 节改为 Python 实现并记录
+  实测版本；AGENTS 模块划分 / 现状）
+- **下一步**：`store/` 的 embedding 抽象（本地 Bekko，模型落 `data/models/`）、迁移机制
+  与向量检索 helper
+
 ### 2026-09-18：议题 B（摄入侧）/ C（存储切分）定案 —— 知识库方案收尾
 
 - **B 摄入侧**：来源 = 本地文件/目录 + HTML（`trafilatura` 已是既有依赖）；**不做**
@@ -157,8 +180,8 @@
 
 **知识库实现启动**（方案已全部定案，2026-09-18）与**记忆系统**（PostgreSQL + pgvector）
 - 知识库：`developDoc/KNOWLEDGE-BASE.md`（A/B/C/D 全定案），分支 `feat/knowledge-base`；
-  **下一步 = 实现 `store/` 底层**（PG 环境 bootstrap → 连接池 → 迁移 → embedding
-  provider → 建表 helper），再做 `knowledge/`
+  **进行中 = `store/` 模块**：环境地基（探针 / bootstrap / 连接探活 / `aris db`）已跑通，
+  下一步做 embedding 抽象 + 迁移 + 向量检索 helper，然后才动 `knowledge/`
 - 记忆系统：主线未取消，`memory/` 仍为占位；后续**复用 `store/`**（不自建第二套）
 - 数据库环境：部署方式已定案（micromamba + conda-forge 便携实例，脚本自动获取，
   见 `developDoc/KNOWLEDGE-BASE.md` 第 3 节）

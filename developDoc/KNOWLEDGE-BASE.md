@@ -67,11 +67,15 @@ postgresql-*-linux-x64-binaries.tar.gz` 现返回 **403**（改走 `getfile.jsp`
 
 定案改用 **conda-forge**：
 
-- `postgresql` 与 `pgvector` **同源**，版本匹配由 solver 保证（实测 `pgvector 0.8.6`
-  有 linux-64 / linux-aarch64）
+- `postgresql` 与 `pgvector` **同源**，版本匹配由 solver 保证（conda-forge 上
+  `pgvector` 有 linux-64 / linux-aarch64）
+- **实测取到 PostgreSQL 17.11 + pgvector 0.8.1**：`pgvector=0.8.6` 与
+  `postgresql=17` 依赖冲突（libpq 17.0 钳制），故规格写 `pgvector>=0.8`、
+  **不锁补丁版本**，由 solver 决定；日后要用 0.8.6+ 需换 PG 大版本或源码编译
 - 由 **micromamba 单文件静态二进制**驱动，**免 root、免编译**，安装到 `data/pg/`
   （`.gitignore` 已覆盖 `data/`，仓库零体积增长）
-- 首次下载约 **300MB**（已接受，走单一路径；不保留"系统 pacman 优先"的双路径分支）
+- 首次下载实测约 **40MB**（29 个包；原先估的 300MB 偏保守）——走单一路径，
+  不保留"系统 pacman 优先"的双路径分支
 
 **pgvector 直接取 conda-forge 预编译包，不源码编译。** 依据（已读源码确认）：
 pgvector 在 glibc Linux + GCC/Clang 上会自动启用 `USE_TARGET_CLONES`
@@ -82,16 +86,31 @@ pgvector 在 glibc Linux + GCC/Clang 上会自动启用 `USE_TARGET_CLONES`
 > 可选后手（当前不需要）：若日后换到支持 AVX-512 的 CPU，可用该 PG 的 `pg_config`
 > 源码编译 `make OPTFLAGS="-march=native"` 覆盖，收益量级约 10~20%。
 
-### 3.3 脚本职责（幂等）
+### 3.3 实现形态与职责（幂等）
 
-- `scripts/pg-bootstrap.sh`：探测 → 按需装 micromamba → 装 PG + pgvector 到
-  `data/pg/` → `initdb`（UTF8、本地 trust、socket 落 `data/pg/run`）→ 起服务
-  → `createdb aris` → `CREATE EXTENSION vector` → 版本清单写 `data/pg/versions.txt`
-- 服务端口用项目专用端口（如 **55432**），避开将来系统 PG 的 5432
-- **下载必须校验 sha256**（常量写死脚本内，升级时人工更新并记 `PROGRESS.md`）
-- 生命周期收成 CLI 子命令 `aris db start|stop|status|psql`（与"CLI 是统一入口"
-  一致），shell 脚本仅作底层实现
-- Python 侧依赖 `psycopg[binary]`（自带 libpq，不依赖系统 libpq）+ `pgvector` 适配包
+**实现落点在 `store/` 模块（Python），不另写 shell 脚本**——原先设想的
+`scripts/pg-bootstrap.sh` / `pg-ctl.sh` **取消**：探测与生命周期统一在 Python 编排
+（`subprocess` 调 `initdb` / `pg_ctl` / `psql`），避免 shell 与 Python 两套探测逻辑
+日后各自漂移。
+
+| 文件 | 职责 |
+|---|---|
+| `store/pgenv.py` | 探针链 + `PgEnv`（bin / pgdata / run / port / user / db）+ DSN 拼装 |
+| `store/bootstrap.py` | micromamba 获取（sha256 校验）→ conda 环境 → `initdb` → 启停 → 建库 → 建扩展 → `versions.txt` |
+| `store/db.py` | psycopg 连接与探活（对外总线服务 `store.health`） |
+
+- CLI：`aris db init|start|stop|status|psql`（`psql` 的后续参数原样透传）
+- 服务端口默认 **55432**，避开将来系统 PG 的 5432；socket 落 `data/pg/run`，
+  仅监听 `127.0.0.1`
+- micromamba **固定版本 + sha256 常量写死** `bootstrap.py`（升级时两处一起人工更新）
+- Python 侧依赖 `psycopg[binary]`（自带 libpq，不依赖系统 libpq）
+- **系统已装则不下载**（`ARIS_PG_BIN` / `pg_config` 命中）：只确保库与扩展存在
+
+**实现状态（2026-09-18 跑通）**：`aris db init|start|stop|status|psql` 全部可用；
+实机实测 PostgreSQL **17.11** + pgvector **0.8.1**（`data/pg` 约 166MB，另有包缓存
+`data/pg-pkgs` 约 91MB 可随时删）。micromamba 与 conda 的根前缀、包缓存、元数据缓存
+以及 `HOME` 全部收在 `data/` 下，不污染用户主目录；`pg_ctl` 启动失败时会附带服务日志
+末尾，便于定位。
 
 ### 3.4 边界
 

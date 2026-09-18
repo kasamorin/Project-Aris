@@ -50,6 +50,8 @@
   独立 RAG 知识检索能力**，与 Aris 个人记忆**分开**。分支 `feat/knowledge-base`，
   商讨稿见 `developDoc/KNOWLEDGE-BASE.md`。**A/B/C/D 全部议题与数据库部署均已定案**
   （2026-09-18，见「已定案」）；下一步按「`store/` 底层先行 → `knowledge/`」进入实现。
+- **数据库地基已跑通（2026-09-18）**：`store/` 的便携 PostgreSQL 17.11 + pgvector 0.8.1
+  就位，`aris db init|start|stop|status|psql` 可用；embedding 抽象与迁移待做。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -197,10 +199,14 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 - `core/` —— 基础设施：统一通讯层（`bus.py` 服务注册表 + 事件总线 + 审计）+
   LLM 提供方抽象（多提供方 fallback、流式、工具调用）
-- `store/` —— **存储与向量基础设施（2026-09-18 定案，尚未实现）**：embedding 抽象
+- `store/` —— **存储与向量基础设施（2026-09-18 定案）**：embedding 抽象
   （文本 → 向量，Protocol + 多实现）+ PostgreSQL/pgvector 基础设施（DSN、连接池、迁移、
   向量检索 helper）。**不认识 `memory/` / `knowledge/`**，不做业务语义；模型本体放
   `data/models/`（不进仓库）。经总线暴露 `store.embed` / `store.health` / `store.migrate`
+  - 已实现（2026-09-18）：环境探针（`pgenv`）、便携实例获取（`bootstrap`，
+    micromamba + conda-forge）、连接探活（`db`，总线 `store.health`）、
+    CLI `aris db init|start|stop|status|psql`；实测 PG 17.11 + pgvector 0.8.1
+  - 待实现：embedding 抽象、迁移、向量检索 helper
 - `memory/` —— 记忆系统：Embedding + 数据库（复用 `store/`，不自建第二套）
 - `knowledge/` —— **知识库（2026-09-18 定案，尚未实现）**：面向外部资料的独立 RAG
   检索，含摄入、分块、来源管理、检索语义。**不做 skill**（属内部底层设施，经大总线
@@ -276,8 +282,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 - **记忆实现方式**：走 RAG，但**不用现有框架**（LangChain/LlamaIndex 等），
   自研轻量实现；重量依赖安装方式（独立环境 / pyproject extras）实现时再定
 - **数据库部署（2026-09-18）**：**不要求用户预装系统 PostgreSQL**，目标「clone 就能用」。
-  由脚本按探针链（`ARIS_PG_BIN` → PATH 中 `pg_config`/`postgres` → 项目内
-  `data/pg/` → 皆无则下载）取用；获取方式定案 **micromamba + conda-forge**
+  由 `store/` 模块按探针链（`ARIS_PG_BIN` → PATH 中 `pg_config`/`postgres` → 项目内
+  `data/pg/` → 皆无则 `aris db init` 下载）取用；获取方式定案 **micromamba + conda-forge**
   （`postgresql` + `pgvector` 同源，免 root、免编译、装到 `data/pg/`，gitignore 覆盖）。
   代码只认 DSN，不感知实例来源。**pgvector 取预编译包、不源码编译**：本机
   Xeon E5-2673 v3 无 AVX-512，pgvector 的 `USE_TARGET_CLONES` 已在运行期给出
