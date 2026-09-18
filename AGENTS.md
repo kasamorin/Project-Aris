@@ -51,7 +51,8 @@
   商讨稿见 `developDoc/KNOWLEDGE-BASE.md`。**A/B/C/D 全部议题与数据库部署均已定案**
   （2026-09-18，见「已定案」）；下一步按「`store/` 底层先行 → `knowledge/`」进入实现。
 - **数据库地基已跑通（2026-09-18）**：`store/` 的便携 PostgreSQL 17.11 + pgvector 0.8.1
-  就位，`aris db init|start|stop|status|psql` 可用；embedding 抽象与迁移待做。
+  就位，`aris db init|start|stop|status|psql` 可用；本地 embedding（Bekko a25m，384 维）
+  也已跑通（`aris store info|embed`），迁移与向量检索 helper 待做。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -206,7 +207,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   - 已实现（2026-09-18）：环境探针（`pgenv`）、便携实例获取（`bootstrap`，
     micromamba + conda-forge）、连接探活（`db`，总线 `store.health`）、
     CLI `aris db init|start|stop|status|psql`；实测 PG 17.11 + pgvector 0.8.1
-  - 待实现：embedding 抽象、迁移、向量检索 helper
+  - 已实现（2026-09-18 续）：embedding 抽象 + 本地 Bekko provider（384 维，懒加载；
+    重依赖为 dependency-group `embedding` 且默认安装）、`aris store info|embed`
+  - 待实现：迁移、向量检索 helper
 - `memory/` —— 记忆系统：Embedding + 数据库（复用 `store/`，不自建第二套）
 - `knowledge/` —— **知识库（2026-09-18 定案，尚未实现）**：面向外部资料的独立 RAG
   检索，含摄入、分块、来源管理、检索语义。**不做 skill**（属内部底层设施，经大总线
@@ -298,8 +301,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   目录监听 / 对话沉淀**）；**CLI 先行**（`aris knowledge add|list|remove|search`），
   **agent 不给摄入权限**（只给检索）；增量 = **content hash 幂等 + 软删重建**，
   两表 `knowledge_docs` / `knowledge_chunks`。**向量维度 384（本地 Bekko），不用云端**
-  ——云端是 `memory/` 冷侧的事，且可避免 Cloudflare 断联降级逻辑；本地 embedding 属
-  重依赖，作为可选/独立环境安装并由 `store/` 懒加载，未安装则知识库自动禁用。
+  ——云端是 `memory/` 冷侧的事，且可避免 Cloudflare 断联降级逻辑；本地 embedding 作为
+  dependency-group `embedding` **默认安装**、代码侧**懒加载**（未装则该组命令给出可读提示）。
   分块 = 标题层级切 + 定长兜底重叠（保留 `heading_path`）；索引 HNSW + cosine
   （`m=16` / `ef_construction=64`，先导数据后建索引）。**实现次序：`store/` 底层先行**。
   详见 `developDoc/KNOWLEDGE-BASE.md` 第 5 节

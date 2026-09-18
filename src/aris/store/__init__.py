@@ -8,9 +8,11 @@
 
 总线服务：
 - ``store.health`` —— 数据库探活（服务端版本 / vector 扩展版本 / 当前库）
+- ``store.embed`` —— 文本 → 向量（懒加载本地 provider）
 
-实现进度：环境探测（`pgenv`）、便携实例获取（`bootstrap`）、连接与探活（`db`）
-已就位；embedding 抽象、迁移与向量检索 helper 待后续。
+实现进度：环境探测（`pgenv`）、便携实例获取（`bootstrap`）、连接与探活（`db`）、
+embedding 抽象与本地 provider（`embedding/`，重依赖可选安装）已就位；
+迁移与向量检索 helper 待后续。
 """
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ from .bootstrap import (
     start,
     stop,
 )
+from .conf import StoreConfig, get_store_config
+from .embedding import EmbeddingError, EmbeddingProvider, get_provider
 from .pgenv import PgEnv, PgSource, detect
 
 
@@ -35,14 +39,25 @@ def _health() -> dict[str, Any]:
     return health(detect())
 
 
+def _embed(texts: list[str]) -> list[list[float]]:
+    """总线服务：文本 → 向量（provider 懒加载，未装重依赖时报可读错误）。"""
+    return get_provider().embed(texts)
+
+
 provide("store.health", _health)
+provide("store.embed", _embed)
 
 __all__ = [
     "BootstrapError",
+    "EmbeddingError",
+    "EmbeddingProvider",
     "PgEnv",
     "PgSource",
+    "StoreConfig",
     "bootstrap",
     "detect",
+    "get_provider",
+    "get_store_config",
     "is_running",
     "start",
     "stop",

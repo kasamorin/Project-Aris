@@ -68,8 +68,13 @@
   - 或装 `torch-cpu` 包。实测 OpenVINO 后端推理不依赖 CUDA。
 - 模型缓存位置：实现 memory 模块时设置 `HF_HOME` 指向项目内 `data/models/`
   （data/ 不进 git），避免散落在 `~/.cache/huggingface`。
-- 以上依赖**不要加进 pyproject.toml 主依赖**（sentence-transformers/openvino 等较重，
-  仅在 memory 模块需要时作为可选/独立环境安装，避免污染主 CLI 环境）。
+- 依赖打包（**2026-09-18 定案，取代原先「不进 pyproject」的口径**）：embedding 栈放
+  `pyproject.toml` 的 **dependency-group `embedding`**，并加入 `[tool.uv] default-groups`，
+  故 `uv sync` 默认装齐、`uv run` 不会把它卸掉（要轻量环境用 `uv sync --no-default-groups`）。
+  代码侧对模型**懒加载**，未装该组时给出可读提示，主 CLI 不受影响。
+- **torch 与 torchvision 必须同锁 PyTorch CPU 源**（`[tool.uv.sources]` + explicit index）：
+  两者不同源时 torchvision 的 CUDA wheel 与 CPU torch 不匹配，会报
+  `operator torchvision::nms does not exist`，进而 `transformers` 直接导入失败（实测踩到）。
 
 ### 2.3 调用示例
 

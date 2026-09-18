@@ -38,7 +38,9 @@
 - **存储**：PostgreSQL + pgvector；**向量检索由数据库执行**，与 provider 无关
 - **实现方式**：走 RAG，但**不用现有框架**（LangChain / LlamaIndex 等），自研轻量实现
 - **表结构预留宽松**，为后续 GraphRAG 留口
-- **重依赖不进主依赖**：sentence-transformers / openvino 等按需作为可选或独立环境安装
+- **重依赖隔离**：sentence-transformers / openvino 等放 `pyproject.toml` 的
+  dependency-group `embedding`（默认安装、代码侧懒加载；轻量环境可
+  `uv sync --no-default-groups`）
 - **模块间通讯走 `core.call` / `core.provide`**，服务命名 `module.service`
 - 密钥一律放 `.env`；文档中禁止写死密钥
 
@@ -98,6 +100,8 @@ pgvector 在 glibc Linux + GCC/Clang 上会自动启用 `USE_TARGET_CLONES`
 | `store/pgenv.py` | 探针链 + `PgEnv`（bin / pgdata / run / port / user / db）+ DSN 拼装 |
 | `store/bootstrap.py` | micromamba 获取（sha256 校验）→ conda 环境 → `initdb` → 启停 → 建库 → 建扩展 → `versions.txt` |
 | `store/db.py` | psycopg 连接与探活（对外总线服务 `store.health`） |
+| `store/conf.py` + `config/store.toml` | embedding 可调参数（provider / 模型 / batch / 截断维度） |
+| `store/embedding/` | embedding 抽象（Protocol）+ 本地 Bekko provider（懒加载；总线服务 `store.embed`） |
 
 - CLI：`aris db init|start|stop|status|psql`（`psql` 的后续参数原样透传）
 - 服务端口默认 **55432**，避开将来系统 PG 的 5432；socket 落 `data/pg/run`，
@@ -106,11 +110,21 @@ pgvector 在 glibc Linux + GCC/Clang 上会自动启用 `USE_TARGET_CLONES`
 - Python 侧依赖 `psycopg[binary]`（自带 libpq，不依赖系统 libpq）
 - **系统已装则不下载**（`ARIS_PG_BIN` / `pg_config` 命中）：只确保库与扩展存在
 
-**实现状态（2026-09-18 跑通）**：`aris db init|start|stop|status|psql` 全部可用；
-实机实测 PostgreSQL **17.11** + pgvector **0.8.1**（`data/pg` 约 166MB，另有包缓存
-`data/pg-pkgs` 约 91MB 可随时删）。micromamba 与 conda 的根前缀、包缓存、元数据缓存
-以及 `HOME` 全部收在 `data/` 下，不污染用户主目录；`pg_ctl` 启动失败时会附带服务日志
-末尾，便于定位。
+**实现状态（2026-09-18 跑通）**：
+
+- **数据库**：`aris db init|start|stop|status|psql` 全部可用；实测 PostgreSQL **17.11** +
+  pgvector **0.8.1**（`data/pg` 约 166MB，另有包缓存 `data/pg-pkgs` 约 91MB 可随时删）。
+  micromamba 与 conda 的根前缀、包缓存、元数据缓存以及 `HOME` 全部收在 `data/` 下，
+  不污染用户主目录；`pg_ctl` 启动失败时会附带服务日志末尾，便于定位。
+- **embedding**：`aris store info|embed` 可用；实测本地 Bekko a25m **384 维**编码通过，
+  模型缓存落 `data/models`（约 224MB）。
+- **重依赖打包（2026-09-18 定案）**：embedding 栈（sentence-transformers /
+  `optimum[openvino]` / openvino / `transformers<5.1` / torch + torchvision）放
+  **dependency-group `embedding` 并加入 `[tool.uv] default-groups`**：`uv sync` 一次装齐
+  （要轻量环境用 `--no-default-groups`），同时避开「`uv run` 隐式把额外依赖卸掉」的坑。
+  **torch 与 torchvision 必须同锁 PyTorch CPU 源**（`[tool.uv.sources]` + explicit index）：
+  两者不同源会报 `operator torchvision::nms does not exist`，进而 `transformers` 导入
+  失败（实测踩到）。
 
 ### 3.4 边界
 
@@ -195,9 +209,9 @@ skill 是**外部扩展接口**，内部模块绕经 skill 只增一层壳与延
 
 - **C1 向量维度：384（本地 Bekko）**。理由（用户决策）：**云端是给 `memory/` 冷侧
   用的，与知识库无关**；且 Cloudflare 可能断联，走云端需额外写断联降级逻辑。代价与对策：
-  - 本地 Bekko 属**重量依赖**（sentence-transformers / OpenVINO，常驻约 1.5 GiB），
-    按既有「重依赖不进主依赖」原则作为**可选 / 独立环境**安装；`store/` 对其
-    **懒加载**，未安装时知识库自动禁用并给出提示（与 `enabled` 开关配合）
+  - 本地 Bekko 属**重依赖**（sentence-transformers / OpenVINO，常驻约 1.5 GiB），
+    放 dependency-group `embedding` 并默认安装；`store/` 对其
+    **懒加载**，依赖缺失时给出可读提示（见 3.3 实现状态）
   - 本地 embedding 批量摄入是 CPU 密集型（`EMBEDDING.md` 实测连续压力约 1164% CPU）
     → 摄入**串行 / 限并发**，必要时降优先级，避免打满主机
   - 表结构**按维度参数化**（`store/` 提供建表 helper，维度取自 provider），日后换

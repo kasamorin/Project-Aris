@@ -638,6 +638,46 @@ def _cmd_db(args: argparse.Namespace) -> int:
     return 1
 
 
+def _cmd_store(args: argparse.Namespace) -> int:
+    """store 模块调试命令：info（配置 + 自检）/ embed（编码文本）。"""
+    from aris.store.conf import get_store_config
+    from aris.store.embedding import EmbeddingError, get_provider
+
+    cfg = get_store_config()
+
+    if args.store_command == "info":
+        print(
+            f"provider: {cfg.embedding_provider} | model: {cfg.local_model} | "
+            f"batch: {cfg.batch_size} | truncate: {cfg.truncate_dim or '-'}"
+        )
+        provider = get_provider()
+        print(f"维度: {provider.dimension}")
+        try:
+            vectors = provider.embed(["维度探针"])
+        except EmbeddingError as e:
+            logger.error(str(e))
+            return 1
+        print(f"自检: 通过（返回 {len(vectors[0])} 维向量）")
+        return 0
+
+    texts = list(args.text)
+    if not texts and not sys.stdin.isatty():
+        texts = [line for line in sys.stdin.read().splitlines() if line.strip()]
+    if not texts:
+        logger.error("没有可编码的文本：给参数，或从 stdin 逐行传入")
+        return 1
+
+    try:
+        vectors = get_provider().embed(texts)
+    except EmbeddingError as e:
+        logger.error(str(e))
+        return 1
+    for text, vec in zip(texts, vectors, strict=True):
+        preview = ", ".join(f"{v:+.4f}" for v in vec[:5])
+        print(f"{len(vec)} 维 | {preview} ... | {text[:40]}")
+    return 0
+
+
 def _extract_psql_passthrough(argv: list[str]) -> tuple[list[str], list[str]]:
     """摘出 `aris db psql` 之后的参数（原样透传，不参与 argparse）。
 
@@ -766,6 +806,16 @@ def main(argv: list[str] | None = None) -> int:
     p_db_psql = p_db_sub.add_parser("psql", help="进入 psql（后续参数原样透传）")
     p_db_psql.set_defaults(func=_cmd_db, psql_args=[])
 
+    p_store = sub.add_parser("store", help="存储/向量基础设施（embedding 调试）")
+    p_store_sub = p_store.add_subparsers(dest="store_command")
+    p_store_info = p_store_sub.add_parser("info", help="打印 embedding 配置并做一次自检")
+    p_store_info.set_defaults(func=_cmd_store)
+    p_store_embed = p_store_sub.add_parser(
+        "embed", help="编码文本并打印维度与向量片段（不给参数则从 stdin 逐行读）"
+    )
+    p_store_embed.add_argument("text", nargs="*", help="待编码文本")
+    p_store_embed.set_defaults(func=_cmd_store)
+
     # `db psql` 之后的参数不参与 argparse（-c 这类选项会被误判），解析前先摘出
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     parse_argv, psql_args = _extract_psql_passthrough(raw_argv)
@@ -773,9 +823,11 @@ def main(argv: list[str] | None = None) -> int:
     if psql_args:
         args.psql_args = psql_args
     settings = get_settings()
-    # doctor / db 是环境管理命令，始终显示 INFO 级别以便查看进度与检查结果
+    # doctor / db / store 是环境与调试命令，始终显示 INFO 级别以便查看进度与结果
     console_level = (
-        "INFO" if (args.verbose or args.command in ("doctor", "db")) else None
+        "INFO"
+        if (args.verbose or args.command in ("doctor", "db", "store"))
+        else None
     )
     # chat 命令默认不向控制台输出日志——全屏 TUI 由 prompt_toolkit 接管终端，
     # loguru 直接写 stderr 会破坏渲染（spinner 残留、界面错位）；日志仍写文件。
@@ -801,6 +853,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "db" and args.db_command is None:
         p_db.print_help()
+        return 0
+
+    if args.command == "store" and args.store_command is None:
+        p_store.print_help()
         return 0
 
     return args.func(args)

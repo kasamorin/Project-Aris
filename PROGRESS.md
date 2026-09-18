@@ -6,6 +6,26 @@
 
 ## 最新状态
 
+### 2026-09-18：store/ embedding 抽象跑通（本地 Bekko 384 维）
+
+- 新增 `store/embedding/`：`base.py`（`EmbeddingProvider` Protocol + `EmbeddingError`）、
+  `local.py`（本地 Bekko a25m，OpenVINO CPU，**懒加载** + 线程安全）、
+  `__init__.py`（provider 单例注册）；`store/conf.py` + `config/store.toml`
+  （provider / 模型 / batch / 截断维度）；总线服务 `store.embed`
+- CLI：`aris store info`（配置 + 自检）/ `aris store embed <文本>`（打印维度与向量片段）
+- 实测：`hotchpotch/bekko-embedding-v1-a25m` **384 维**编码通过；模型缓存落
+  `data/models`（约 224MB）；`uv run pytest` **58 passed**
+- **打包定案（取代 B/C 条目里「可选/独立环境」的口径）**：embedding 栈放
+  **dependency-group `embedding`** 并加入 `[tool.uv] default-groups`——`uv sync` 一次
+  装齐、`uv run` 不会把它卸掉（轻量环境用 `uv sync --no-default-groups`）
+- 踩坑记录（已修）：① torch 与 torchvision 必须**同锁 PyTorch CPU 源**，否则
+  torchvision 的 CUDA wheel 与 CPU torch 不匹配，报 `operator torchvision::nms does
+  not exist`，`transformers` 直接导入失败；② OpenVINO 默认往 HOME 写遥测，已设
+  `OV_TELEMETRY_OPT_OUT` 关闭；③ HF 缓存经 `HF_HOME` 收进 `data/models/`，不散落主目录
+- 依赖新增（dependency-group）：sentence-transformers / `optimum[openvino]` / openvino /
+  `transformers<5.1` / torch + torchvision（CPU）；`.venv` 约 1.5GB
+- **下一步**：`store/` 的迁移机制与向量检索 helper，然后进 `knowledge/`
+
 ### 2026-09-18：store/ 环境地基跑通（`aris db` 可用）
 
 - 新增 `store/` 模块：
@@ -180,8 +200,9 @@
 
 **知识库实现启动**（方案已全部定案，2026-09-18）与**记忆系统**（PostgreSQL + pgvector）
 - 知识库：`developDoc/KNOWLEDGE-BASE.md`（A/B/C/D 全定案），分支 `feat/knowledge-base`；
-  **进行中 = `store/` 模块**：环境地基（探针 / bootstrap / 连接探活 / `aris db`）已跑通，
-  下一步做 embedding 抽象 + 迁移 + 向量检索 helper，然后才动 `knowledge/`
+  **进行中 = `store/` 模块**：环境地基（探针 / bootstrap / 连接探活 / `aris db`）与
+  embedding 抽象（本地 Bekko 384 维 / `aris store`）已跑通，下一步做迁移机制与向量
+  检索 helper，然后才动 `knowledge/`
 - 记忆系统：主线未取消，`memory/` 仍为占位；后续**复用 `store/`**（不自建第二套）
 - 数据库环境：部署方式已定案（micromamba + conda-forge 便携实例，脚本自动获取，
   见 `developDoc/KNOWLEDGE-BASE.md` 第 3 节）
