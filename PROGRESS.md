@@ -6,6 +6,27 @@
 
 ## 最新状态
 
+### 2026-09-18：议题 B（摄入侧）/ C（存储切分）定案 —— 知识库方案收尾
+
+- **B 摄入侧**：来源 = 本地文件/目录 + HTML（`trafilatura` 已是既有依赖）；**不做**
+  PDF、目录监听、从对话自动沉淀。**CLI 先行**（`aris knowledge add|list|remove|search`），
+  WebUI 上传排第二；**agent 不给摄入权限**（只给检索，与「用户投喂资料」定位一致）。
+  增量 = **content hash 幂等 + 软删重建**，两表 `knowledge_docs` / `knowledge_chunks`。
+- **C 存储与切分**：**向量维度 384（本地 Bekko）**，不用云端——云端是 `memory/` 冷侧
+  的事，且可避免 Cloudflare 断联降级逻辑。本地 embedding 属重依赖 → 可选/独立环境安装
+  + `store/` 懒加载，未安装则知识库自动禁用；摄入串行限并发（压测下约 1164% CPU，
+  避免打满主机）。分块 = 标题层级切 + 定长兜底重叠（保留 `heading_path`）；元数据
+  11 字段 + `meta jsonb`；索引 HNSW + cosine（`m=16` / `ef_construction=64`），
+  先导数据后建索引。
+- **实现次序**：**`store/` 底层先行** → `knowledge/` → `memory/` 复用同一底层。
+- **总线定名**：按职责核对 `core/bus.py`——含服务注册表（`provide`/`call`）+ 事件广播
+  （`subscribe`/`emit`）+ 审计查询，故定名**「跨模块通讯总线」（CMCB）**；**暂不改名**
+  （涉及既有 16 个服务命名与多处文档），留作待办。
+- 知识库四个议题（A/B/C/D）**全部定案**；已同步 `AGENTS.md` 与
+  `developDoc/KNOWLEDGE-BASE.md`（第 4、5 节）。本轮仅文档，未写代码。
+- **下一步**：进入实现——先做 `store/`（PG 环境 bootstrap → 连接池 → 迁移 →
+  embedding provider → 建表 helper）。
+
 ### 2026-09-18：议题 A（边界归属）/ D（检索侧）定案
 
 - **A 边界与归属**：新建两个顶层模块——
@@ -129,17 +150,17 @@
 6. 语音链路（STT → LLM → TTS）
 7. ✅ 行为扩展（函数调用 2026-08-09，联网搜索 2026-08-09）
 8. GraphRAG
-9. 知识库（独立 RAG 知识检索）—— **商讨中（2026-09-14 起）**：A/D 已定案，
-   B/C 待商讨；详见 `developDoc/KNOWLEDGE-BASE.md`
+9. 知识库（独立 RAG 知识检索）—— **方案已定案（2026-09-18，A/B/C/D）**，
+   实现次序 `store/` 底层先行；详见 `developDoc/KNOWLEDGE-BASE.md`
 
 ## 当前聚焦
 
-**知识库方案商讨**（2026-09-14 起）与**记忆系统**（PostgreSQL + pgvector）
-- 知识库：商讨稿见 `developDoc/KNOWLEDGE-BASE.md`，分支 `feat/knowledge-base`；
-  **A 边界归属 / D 检索侧已定案**（新建 `store/` + `knowledge/`，2026-09-18），
-  **B 摄入侧 / C 存储切分待商讨**
+**知识库实现启动**（方案已全部定案，2026-09-18）与**记忆系统**（PostgreSQL + pgvector）
+- 知识库：`developDoc/KNOWLEDGE-BASE.md`（A/B/C/D 全定案），分支 `feat/knowledge-base`；
+  **下一步 = 实现 `store/` 底层**（PG 环境 bootstrap → 连接池 → 迁移 → embedding
+  provider → 建表 helper），再做 `knowledge/`
 - 记忆系统：主线未取消，`memory/` 仍为占位；后续**复用 `store/`**（不自建第二套）
-- 共同前置：数据库环境部署方式**已定案**（2026-09-18，micromamba + conda-forge
-  便携实例，脚本自动获取，见上文与 `developDoc/KNOWLEDGE-BASE.md` 第 3 节）
-- 新增待办：总线改名（用户提出，届时统一调整既有 16 个服务命名）
+- 数据库环境：部署方式已定案（micromamba + conda-forge 便携实例，脚本自动获取，
+  见 `developDoc/KNOWLEDGE-BASE.md` 第 3 节）
+- 待办：总线改名（已定名 CMCB，涉及面大暂缓）
 - WebUI 管理后台已完成（v0.3.0，2026-08-23）

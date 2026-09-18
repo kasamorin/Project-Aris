@@ -6,7 +6,7 @@
 
 - 起始日期：2026-09-14
 - 开发分支：`feat/knowledge-base`（从 `develop` @ `7f0b4dd` 拉取）
-- 阶段：**方案商讨**（A 边界归属 / D 检索侧已定案，B 摄入侧 / C 存储切分待定），尚未写代码
+- 阶段：**全部议题已定案**（A/B/C/D，2026-09-18），尚未写代码；实现次序：`store/` 底层先行
 
 ---
 
@@ -153,25 +153,51 @@ skill 是**外部扩展接口**，内部模块绕经 skill 只增一层壳与延
 
 ---
 
-## 5. 待商讨决策点（B / C，内部实现）
+## 5. 已定案：B 摄入侧 / C 存储与切分（2026-09-18）
 
-> B / C 可先拍粗方向，等最小闭环跑通再调；A / D 已定案（见第 4 节）。
+### 5.1 B. 摄入侧
 
-### B. 摄入侧（谁是数据入口）
+- **B1 数据来源**：**本地文件/目录投喂**起步，顺带 **HTML / 网页存档**（`trafilatura`
+  已是既有依赖，成本低）。**不做**：目录监听（`watchdog` 常驻 + 新依赖，牵入后台进程
+  概念）、PDF（重依赖 + 表格/扫描件解析质量参差）、从对话自动沉淀（与「用户投喂外部
+  资料」的定位不同，且易污染知识库）——均列后续。
+- **B2 格式范围**：`md` / `txt` / `html`；PDF 列第二阶段。
+- **B3 触发方式**：**CLI 先行**——`aris knowledge add|list|remove|search`。WebUI 上传
+  排第二（后台骨架已有，落盘后调同一个 `knowledge.ingest` 服务，不重复实现）。
+  **agent 不给摄入权限**：知识库定位是用户投喂，让 Aris 自己往里塞东西风险与收益
+  不成正比；agent 只拿检索工具（见 4.2 D1）。
+- **B4 增量与去重**：以**文档**为单位 + **content hash 幂等**：
+  - 同路径重摄入：hash 未变 → 跳过；hash 变 → 旧块**软删**（`deleted_at`）后插新块
+  - 两张表：`knowledge_docs`（路径 / 标题 / hash / mtime / 状态）与
+    `knowledge_chunks`（块 + FK → doc）
+  - **不做**向量级去重（成本高、收益低）
 
-- **B1** 数据来源：本地文件投喂 / 目录监听 / 网页存档 / 从对话自动沉淀？
-- **B2** 格式范围与优先级：md / txt / pdf / html？
-- **B3** 触发方式：CLI 命令（如 `aris knowledge add`）/ WebUI 上传
-  （后台骨架已有）/ agent 自主工具？
-- **B4** 增量与更新：文档改动后如何处理（全量重建 / 版本化 / 软删除）、如何去重？
+### 5.2 C. 存储与切分
 
-### C. 存储与切分（内部实现）
+- **C1 向量维度：384（本地 Bekko）**。理由（用户决策）：**云端是给 `memory/` 冷侧
+  用的，与知识库无关**；且 Cloudflare 可能断联，走云端需额外写断联降级逻辑。代价与对策：
+  - 本地 Bekko 属**重量依赖**（sentence-transformers / OpenVINO，常驻约 1.5 GiB），
+    按既有「重依赖不进主依赖」原则作为**可选 / 独立环境**安装；`store/` 对其
+    **懒加载**，未安装时知识库自动禁用并给出提示（与 `enabled` 开关配合）
+  - 本地 embedding 批量摄入是 CPU 密集型（`EMBEDDING.md` 实测连续压力约 1164% CPU）
+    → 摄入**串行 / 限并发**，必要时降优先级，避免打满主机
+  - 表结构**按维度参数化**（`store/` 提供建表 helper，维度取自 provider），日后换
+    维度只需重建该表 + 重摄入，代码不动
+- **C2 分块策略**：**标题层级切 + 定长兜底重叠**。md 按 `##`/`###` 切 section，超长再
+  按段落切，overlap ≈15%；纯文本 / HTML 按段落聚合到 500–800 字符。块保留
+  `heading_path`（如「安装 > 依赖」）并在检索结果中展示，提升可引用性。
+  **不做**语义切分（需额外模型、收益不稳）。
+- **C3 元数据字段**：`doc_id` / `source_path` / `source_hash` / `source_mtime` /
+  `title` / `heading_path` / `chunk_index` / `char_count` / `content_hash` /
+  `ingested_at` / `deleted_at`，另留 `meta jsonb` 兑将来（沿用「表结构预留宽松」）。
+- **C4 索引与参数**：HNSW + `vector_cosine_ops`，`m=16` / `ef_construction=64`（先用
+  pgvector 默认值跑通再调）；查询期 `ef_search` 可调（默认 40）；top-k 默认 5；
+  **初期不设相似度阈值**（避免误杀）。**先导数据、后建索引**。
 
-- **C1** `knowledge_chunks` 表用哪个维度——1024（冷模型，批量摄入天然归冷侧）
-  还是 384？
-- **C2** 分块策略：按标题层级 / 固定长度带重叠 / 语义切分，chunk 多长？
-- **C3** 元数据字段：来源路径、标题、位置、时间、内容 hash 等取哪些？
-- **C4** 表结构与索引：HNSW / IVFFlat，检索参数（top-k、相似度阈值）。
+### 5.3 实现次序（2026-09-18 定案）
+
+**`store/` 底层先行**：PG 环境 bootstrap → 连接池 → 迁移 → embedding provider →
+建表 helper，跑通后再做 `knowledge/` 的摄入与检索；`memory/` 随后复用同一底层。
 
 ---
 
@@ -186,5 +212,8 @@ skill 是**外部扩展接口**，内部模块绕经 skill 只增一层壳与延
 | 2026-09-18 | 数据库部署（原前置阻塞） | **micromamba + conda-forge** 便携 PostgreSQL + pgvector，脚本探测缺失后自动获取，不依赖系统安装（见第 3 节） | 前置阻塞解除；代码只认 DSN，不影响 A/B/C/D |
 | 2026-09-18 | A1/A2/A3 边界与归属 | 新建 **`store/`**（embedding + PG 基础设施）+ **`knowledge/`** 两模块，共享底层、依赖单向；**不做 skill**，经大总线暴露；开关 `config/knowledge.toml: enabled` | 目录结构与服务表定型；`memory/` 后续复用 `store/` |
 | 2026-09-18 | D1/D2/D3/D4 检索侧 | agent 工具**自主调用**（无自动注入）；第一阶段**纯向量**；结果格式沿用 web_search 约定 + **必带来源**；与记忆**两条独立通路** | 对外契约定型；`knowledge_search` 工具与 `store.embed` 服务可直接实现 |
+| 2026-09-18 | B1–B4 摄入侧 | 本地文件/目录 + HTML 起步（**无 PDF / 目录监听 / 对话沉淀**）；**CLI 先行**，**agent 不给摄入权**；content hash 幂等 + **软删重建** | 摄入链路定型；`knowledge_docs` / `knowledge_chunks` 两表 |
+| 2026-09-18 | C1–C4 存储与切分 | 维度 **384 本地 Bekko**（不占云端）；标题层级切 + 定长兜底重叠；元数据 11 字段 + `meta jsonb`；HNSW cosine `m=16` / `ef_construction=64`，先导数据后建索引 | 表结构定型；本地 embedding 列可选依赖 + 摄入限并发 |
+| 2026-09-18 | 实现次序 | **`store/` 底层先行**，再做 `knowledge/`，`memory/` 随后复用 | 下一步进入实现 |
 
 （待续）

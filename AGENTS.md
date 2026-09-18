@@ -48,8 +48,8 @@
   `scripts/release-check.sh` 发布检查落地。详 `developDoc/SECURITY-AND-REFACTOR-PLAN.md`。
 - **知识库（Knowledge Base）方案商讨中（2026-09-14 起）**：定位为**面向外部资料的
   独立 RAG 知识检索能力**，与 Aris 个人记忆**分开**。分支 `feat/knowledge-base`，
-  商讨稿见 `developDoc/KNOWLEDGE-BASE.md`。**已定案**：数据库部署方式、A 边界归属与
-  D 检索侧接口（均 2026-09-18，见「已定案」）；**待定**：B 摄入侧、C 存储切分。
+  商讨稿见 `developDoc/KNOWLEDGE-BASE.md`。**A/B/C/D 全部议题与数据库部署均已定案**
+  （2026-09-18，见「已定案」）；下一步按「`store/` 底层先行 → `knowledge/`」进入实现。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -205,7 +205,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 - `knowledge/` —— **知识库（2026-09-18 定案，尚未实现）**：面向外部资料的独立 RAG
   检索，含摄入、分块、来源管理、检索语义。**不做 skill**（属内部底层设施，经大总线
   暴露 `knowledge.search` / `knowledge.ingest` / `knowledge.sources`）；启用开关为
-  `config/knowledge.toml` 的 `enabled`。详见 `developDoc/KNOWLEDGE-BASE.md`
+  `config/knowledge.toml` 的 `enabled`。**向量维度 384（本地 Bekko，非云端）**，
+  摄入走 CLI（`aris knowledge ...`），**agent 只拿检索工具、不给摄入权**。
+  详见 `developDoc/KNOWLEDGE-BASE.md`
 - `voice/` —— STT（语音识别）、TTS（语音合成）
 - `persona/` —— 人格系统（提示词工程起步，2026-08-12）：注册
   `persona.system_prompt` 服务，其他模块经 `core.call` 取人设，不再硬编码；
@@ -245,10 +247,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
    MCP / Skills 待后续；联网搜索已完成（Bing 直连 + Tavily 兜底）
 8. GraphRAG
-9. 知识库（独立 RAG 知识检索）—— **商讨中（2026-09-14 起）**：定位为面向外部资料的
-   独立检索能力，与个人记忆分开。**已定案**：新建 `store/` + `knowledge/` 两模块、
-   检索接口形态与数据库部署（2026-09-18）；**待商讨**：B 摄入侧 / C 存储切分，
-   以及与本项（记忆系统）的先后次序。详见 `developDoc/KNOWLEDGE-BASE.md`
+9. 知识库（独立 RAG 知识检索）—— **方案已定案（2026-09-18）**：定位为面向外部资料的
+   独立检索能力，与个人记忆分开；`store/` + `knowledge/` 两模块、摄入与检索接口、
+   存储与切分、数据库部署均已定。**实现次序：`store/` 底层先行**。
+   详见 `developDoc/KNOWLEDGE-BASE.md`
 
 ## 已定案（直接照做，无需再确认）
 
@@ -286,6 +288,15 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   暴露。检索走 agent 工具**自主调用**（不做每轮自动 RAG 注入）；第一阶段**纯向量**
   （混合检索 / rerank 列第二阶段）；结果格式沿用 `web_search` 约定且**必带来源标识**；
   与记忆检索**两条独立通路**，不合并统一入口。详见 `developDoc/KNOWLEDGE-BASE.md` 第 4 节
+- **知识库摄入与存储（2026-09-18）**：来源 = 本地文件/目录 + HTML（**不做 PDF /
+  目录监听 / 对话沉淀**）；**CLI 先行**（`aris knowledge add|list|remove|search`），
+  **agent 不给摄入权限**（只给检索）；增量 = **content hash 幂等 + 软删重建**，
+  两表 `knowledge_docs` / `knowledge_chunks`。**向量维度 384（本地 Bekko），不用云端**
+  ——云端是 `memory/` 冷侧的事，且可避免 Cloudflare 断联降级逻辑；本地 embedding 属
+  重依赖，作为可选/独立环境安装并由 `store/` 懒加载，未安装则知识库自动禁用。
+  分块 = 标题层级切 + 定长兜底重叠（保留 `heading_path`）；索引 HNSW + cosine
+  （`m=16` / `ef_construction=64`，先导数据后建索引）。**实现次序：`store/` 底层先行**。
+  详见 `developDoc/KNOWLEDGE-BASE.md` 第 5 节
 - **联网搜索（2026-08-09 定案；2026-08-12 精简；2026-08-14 改 Bing 主链路）**：
   **Bing 直连为主（www.bing.com，零成本无 key）+ Tavily API 兜底**
   （`TAVILY_API_KEY` 走 `.env`）。曾尝试 Playwright 驱动浏览器降级方案
@@ -335,13 +346,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   —— 交给 Aris（相当于「打断 + 继续听」）或丢弃并假装没听见（「装没听见」）。
   判断依据待定（如语气、上下文、用户意图）。实现前先定方案
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
-- **知识库的摄入侧与存储切分（未定，2026-09-18 起商讨）**：**B1** 数据来源 /
-  **B2** 格式范围与优先级 / **B3** 触发方式（CLI / WebUI / agent 工具）/
-  **B4** 增量与去重；**C1** 向量维度（1024 冷侧 / 384）/ **C2** 分块策略 /
-  **C3** 元数据字段 / **C4** 表结构与索引参数。边界与检索接口**已定案**（见「已定案」），
-  仅 B / C 待商讨，议题清单见 `developDoc/KNOWLEDGE-BASE.md` 第 5 节
-- **总线改名（未定，2026-09-18 用户提出）**：用户计划给总线重新取名，届时统一调整
-  既有 16 个服务命名；改名方案定案前不动
+- **总线改名（待做，2026-09-18 定名）**：按职责命名——现行 `core/bus.py` 同时承载
+  **服务注册表（`provide`/`call`）+ 事件广播（`subscribe`/`emit`）+ 审计查询**，故定名
+  **「跨模块通讯总线」（Cross-Module Communication Bus, CMCB）**。**暂不改**：涉及既有
+  16 个服务命名与多处文档，改动面太大，留作待办，择期统一替换
 - ~~测试框架是否启用 pytest~~（已定：2026-08-18 启用 pytest，见技术栈）
 
 ## 文档索引（按需阅读）
@@ -354,7 +362,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | 技能系统（`behavior.skills`） | `developDoc/SKILLS.md` |
 | 联网搜索方案（演进历史 / 留档） | `developDoc/WEB-SEARCH.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
-| 知识库（独立 RAG 知识检索；A/D 已定案，B/C 待定） | `developDoc/KNOWLEDGE-BASE.md` |
+| 知识库（独立 RAG 知识检索；议题全部定案） | `developDoc/KNOWLEDGE-BASE.md` |
 | LLM 提供商/模型管理（list/check/fetch/退休） | `developDoc/LLM-PROVIDER-MGMT.md` |
 | `voice` 模块（STT / TTS） | `developDoc/stt&&tts选型.md` |
 | 插件系统（草案，含后续讨论） | `developDoc/PLUGIN.md` |
