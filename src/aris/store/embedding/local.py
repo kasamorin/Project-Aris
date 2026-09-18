@@ -104,7 +104,9 @@ class LocalBekkoProvider:
         self._hf_home.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("HF_HOME", str(self._hf_home))
         os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
-        # OpenVINO 默认往 HOME 写遥测文件；家里不可写时会刷一串 warning，直接关掉
+        # OpenVINO 遥测默认往 `$HOME/intel` 写 consent 文件；HOME 不可写（只读挂载 /
+        # 容器）时会刷 warning。官方 opt-out 是写 consent 文件，环境变量在部分版本
+        # 有效，这里一并设上；仍有 warning 属无害噪音（数据不会外发）。
         os.environ.setdefault("OV_TELEMETRY_OPT_OUT", "1")
         os.environ.setdefault("OPENVINO_TELEMETRY_OPT_OUT", "1")
 

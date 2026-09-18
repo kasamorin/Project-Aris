@@ -20,8 +20,10 @@
   装齐、`uv run` 不会把它卸掉（轻量环境用 `uv sync --no-default-groups`）
 - 踩坑记录（已修）：① torch 与 torchvision 必须**同锁 PyTorch CPU 源**，否则
   torchvision 的 CUDA wheel 与 CPU torch 不匹配，报 `operator torchvision::nms does
-  not exist`，`transformers` 直接导入失败；② OpenVINO 默认往 HOME 写遥测，已设
-  `OV_TELEMETRY_OPT_OUT` 关闭；③ HF 缓存经 `HF_HOME` 收进 `data/models/`，不散落主目录
+  not exist`，`transformers` 直接导入失败；② OpenVINO 遥测往 `$HOME/intel` 写 consent
+  文件，HOME 只读时会刷 warning（数据不外发，属无害噪音；已设 opt-out 环境变量，
+  彻底消除需在可写 HOME 下跑一次或写 consent 文件）；③ HF 缓存经 `HF_HOME` 收进
+  `data/models/`，不散落主目录
 - 依赖新增（dependency-group）：sentence-transformers / `optimum[openvino]` / openvino /
   `transformers<5.1` / torch + torchvision（CPU）；`.venv` 约 1.5GB
 - **下一步**：`store/` 的迁移机制与向量检索 helper，然后进 `knowledge/`
