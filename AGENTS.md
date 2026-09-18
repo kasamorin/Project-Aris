@@ -54,10 +54,10 @@
   鉴权绕过等安全漏洞全部修复；webui 全部路由改走 `core.call`（16 个总线服务 +
   启动自检）；新增 11 个关键路径测试（总计 48 通过）；pre-commit 分支保护 +
   `scripts/release-check.sh` 发布检查落地。详 `developDoc/SECURITY-AND-REFACTOR-PLAN.md`。
-- **知识库（Knowledge Base）方案商讨中（2026-09-14 起）**：定位为**面向外部资料的
-  独立 RAG 知识检索能力**，与 Aris 个人记忆**分开**。分支 `feat/knowledge-base`，
-  商讨稿见 `developDoc/KNOWLEDGE-BASE.md`。**A/B/C/D 全部议题与数据库部署均已定案**
-  （2026-09-18，见「已定案」）；下一步按「`store/` 底层先行 → `knowledge/`」进入实现。
+- **知识库（Knowledge Base）已落地（2026-09-14 起商讨，2026-09-18 实现）**：定位为
+  **面向外部资料的独立 RAG 知识检索能力**，与 Aris 个人记忆**分开**。全部议题与部署
+  方式定案见 `developDoc/KNOWLEDGE-BASE.md`；`store/` 底层 + `knowledge/` 首期
+  + agent 工具 + WebUI 知识库页均已跑通（v0.4.0 发布内容）。
 - **数据库地基已跑通（2026-09-18）**：`store/` 的便携 PostgreSQL 17.11 + pgvector 0.8.1
   就位，`aris db init|start|stop|status|psql` 可用；本地 embedding（Bekko a25m，384 维）
   也已跑通（`aris store info|embed`）。**`store/` 三块地基（PG 环境 / embedding /
@@ -271,8 +271,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 开发路线
 
-> **当前聚焦：知识库准备（商讨中，2026-09-14 起）与记忆系统**（PostgreSQL +
-> pgvector）。WebUI 管理后台已完成（v0.3.0，2026-08-23），详见 `developDoc/WEBUI.md`。
+> **当前聚焦：知识库首期已完成（v0.4.0，2026-09-18）**；下一步候选：真 API 实测 /
+> 知识库第二阶段（PDF、混合检索）/ 记忆系统（`memory/` 复用 `store/`）。
+> WebUI 管理后台见 `developDoc/WEBUI.md`。
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
@@ -285,9 +286,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
    MCP / Skills 待后续；联网搜索已完成（Bing 直连 + Tavily 兜底）
 8. GraphRAG
-9. 知识库（独立 RAG 知识检索）—— **方案已定案（2026-09-18）**：定位为面向外部资料的
-   独立检索能力，与个人记忆分开；`store/` + `knowledge/` 两模块、摄入与检索接口、
-   存储与切分、数据库部署均已定。**实现次序：`store/` 底层先行**。
+9. 知识库（独立 RAG 知识检索）—— **已完成首期（2026-09-18，随 v0.4.0 发布）**：
+   `store/` 三块地基（PG 环境 / embedding / 迁移 + 向量检索 helper）+ `knowledge/`
+   （两表、分块、摄入、检索）+ agent 工具 `knowledge_search` + WebUI 知识库页
+   `/knowledge`。**待续**：PDF 与混合检索（第二阶段）。
    详见 `developDoc/KNOWLEDGE-BASE.md`
 
 ## 已定案（直接照做，无需再确认）

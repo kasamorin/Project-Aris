@@ -370,10 +370,11 @@
 ## 当前聚焦
 
 **知识库实现启动**（方案已全部定案，2026-09-18）与**记忆系统**（PostgreSQL + pgvector）
-- 知识库：`developDoc/KNOWLEDGE-BASE.md`（A/B/C/D 全定案），分支 `feat/knowledge-base`；
-  **进行中 = `store/` 模块**：环境地基（探针 / bootstrap / 连接探活 / `aris db`）与
-  embedding 抽象（本地 Bekko 384 维 / `aris store`）已跑通，下一步做迁移机制与向量
-  检索 helper，然后才动 `knowledge/`
+- 知识库：`developDoc/KNOWLEDGE-BASE.md`（A/B/C/D 全定案）；`store/` 三块地基 +
+  `knowledge/` 首期（两表 / 分块 / 摄入 / 检索）+ agent 工具 `knowledge_search`
+  + WebUI 知识库页 `/knowledge` 均已跑通，随 **v0.4.0** 发布
+- **下一步候选**：真 API 实测（Aris 是否主动查库）；PDF 与混合检索（第二阶段）；
+  或转记忆系统（`memory/` 复用 `store/`）
 - 记忆系统：主线未取消，`memory/` 仍为占位；后续**复用 `store/`**（不自建第二套）
 - 数据库环境：部署方式已定案（micromamba + conda-forge 便携实例，脚本自动获取，
   见 `developDoc/KNOWLEDGE-BASE.md` 第 3 节）
