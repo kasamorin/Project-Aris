@@ -101,7 +101,11 @@ def test_local_provider_metadata_without_deps(tmp_path):
 
 
 def test_is_running_requires_real_probe(tmp_path, monkeypatch):
-    """仅凭 pg_ctl status 不够：残留 pidfile 会让它误报，须由 pg_isready 实测。"""
+    """仅凭 pg_ctl status 不够：残留 pidfile 会让它误报，须由 pg_isready 实测。
+
+    pg_isready 退出码：0 接受连接、1 在线但拒绝本次探测（如默认库不存在/启动中）、
+    2 无响应——只有 0/1 算在跑，否则「库还没建好」时会被误判成没起。
+    """
     import importlib
 
     # 注意：store/__init__ 会重导出 bootstrap_env，故这里必须按模块路径取
@@ -116,20 +120,59 @@ def test_is_running_requires_real_probe(tmp_path, monkeypatch):
     (env.pgdata).mkdir(parents=True, exist_ok=True)
     (env.pgdata / "PG_VERSION").write_text("17\n", encoding="utf-8")
 
-    codes = iter([0, 2])  # pg_ctl status=运行中，pg_isready=无响应
+    state = {"codes": iter([0, 2])}  # pg_ctl status=在跑，pg_isready=无响应
 
     class _Result:
         returncode = 0
 
     def _fake_run(cmd, **_kwargs):
-        _Result.returncode = next(codes)
+        _Result.returncode = next(state["codes"])
         return _Result()
 
     monkeypatch.setattr(bootstrap_mod.subprocess, "run", _fake_run)
-    assert bootstrap_mod.is_running(env) is False
+    assert bootstrap_mod.is_running(env) is False  # 无响应 → 没在跑
 
-    codes = iter([0, 0])
+    state["codes"] = iter([0, 0])
     assert bootstrap_mod.is_running(env) is True
+
+    state["codes"] = iter([0, 1])  # 在线但拒绝（如库不存在）
+    assert bootstrap_mod.is_running(env) is True
+
+
+def test_start_clears_stale_pidfile(tmp_path, monkeypatch):
+    """崩溃后残留的 postmaster.pid 会挡住 pg_ctl 启动，要先清掉。"""
+    import importlib
+
+    bootstrap_mod = importlib.import_module("aris.store.bootstrap")
+    from aris.store.pgenv import detect
+
+    bin_dir = _fake_bin(tmp_path / "pg")
+    for name in ("pg_ctl", "pg_isready"):
+        (bin_dir / name).write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("ARIS_PG_BIN", str(bin_dir))
+    env = detect(tmp_path / "data")
+    env.pgdata.mkdir(parents=True, exist_ok=True)
+    (env.pgdata / "PG_VERSION").write_text("17\n", encoding="utf-8")
+    pid_file = env.pgdata / "postmaster.pid"
+    pid_file.write_text("12\n", encoding="utf-8")  # 残留
+
+    calls: list[str] = []
+
+    class _Result:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    def _fake_run(cmd, **_kwargs):
+        calls.append(str(cmd[0]).rsplit("/", 1)[-1])
+        _Result.returncode = 0 if "start" in cmd else 1  # status → 未运行；start → 成功
+        return _Result()
+
+    monkeypatch.setattr(bootstrap_mod.subprocess, "run", _fake_run)
+    assert bootstrap_mod.start(env) is True
+
+    assert not pid_file.exists()  # 残留被清理
+    assert calls == ["pg_ctl", "pg_ctl"]  # status 探测 + start
 
 
 def test_store_services_registered():

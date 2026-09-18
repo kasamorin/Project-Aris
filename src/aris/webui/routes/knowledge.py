@@ -21,12 +21,23 @@ UPLOAD_ACCEPT = ".md,.markdown,.txt,.html,.htm"
 
 
 def _safe_status() -> dict:
-    """取知识库状态；数据库没起来时也要给页面一个可读的结果，而不是 500。"""
+    """取知识库状态；数据库没起来时给出可读提示，而不是 500 或一串 psycopg 原文。"""
     try:
-        return call("knowledge.status") or {}
+        status = call("knowledge.status") or {}
     except Exception as exc:  # noqa: BLE001 —— 管理后台宽容降级
         logger.warning(f"知识库状态查询失败：{exc}")
-        return {"enabled": False, "error": str(exc), "docs": 0, "chunks": 0}
+        return {"enabled": False, "error": _friendly_db_error(str(exc)), "docs": 0, "chunks": 0}
+    if status.get("error"):
+        status["error"] = _friendly_db_error(str(status["error"]))
+    return status
+
+
+def _friendly_db_error(message: str) -> str:
+    """把连接类报错换成可操作的提示（便携实例不会随开机自启，属于常见状态）。"""
+    markers = ("Connection refused", "connection failed", "could not connect")
+    if any(m in message for m in markers):
+        return "数据库未运行：在项目目录执行 `aris db start` 后刷新本页"
+    return message
 
 
 @router.get("/knowledge", response_class=HTMLResponse)
@@ -44,6 +55,10 @@ def knowledge_page(request: Request, q: str = "", top_k: int = 0) -> HTMLRespons
         except Exception as exc:  # 数据库不可用：页面照常显示，只是列表为空
             logger.warning(f"知识库列表查询失败：{exc}")
             status["error"] = str(exc)
+
+    # 统一把连接类报错换成人话（status() 内部也会吞异常放进 error 字段）
+    if status.get("error"):
+        status["error"] = _friendly_db_error(str(status["error"]))
 
     results: list[dict] = []
     search_error = ""

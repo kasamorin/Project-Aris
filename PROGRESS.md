@@ -6,6 +6,28 @@
 
 ## 最新状态
 
+### 2026-09-18：修「数据库未运行」的两个真 bug（is_running 误判 + 残留 pidfile 挡启动）
+
+- 现象（用户报）：WebUI 知识库页显示 `connection failed ... Connection refused`；
+  手动 `aris db start` 又报 `lock file "postmaster.pid" already exists /
+  Is another postmaster (PID 12) running`
+- **bug ①**：`is_running()` 用 `pg_isready` 退出码判定时只认 `0`（接受连接），
+  但**服务器在线却拒绝本次探测**（默认库不存在 / 正在启动中）返回 `1`，被误判成
+  "没在跑" → 启动流程会去重复启一个已在跑的实例。现改为 `0/1` 都算在跑
+  （`2` 无响应才算停），并把退出码语义写进注释
+- **bug ②**：崩溃 / 命名空间回收后残留的 `postmaster.pid`（PID 被复用）会让
+  `pg_ctl start` 直接拒绝启动。现 `start()` / `stop()` 先探测，确认服务无响应后
+  清理残留 pidfile 再继续（`_clear_stale_pidfile`，带 warning）
+- WebUI：数据库不可用时的报错换成可操作文案
+  「数据库未运行：在项目目录执行 `aris db start` 后刷新本页」——`status()` 内部
+  吞异常与路由兜底两条路径都要转，否则只转一条仍会漏（实测踩到）
+- 实测：`aris db start` 自动清理残留 pidfile 后成功启动（PG 17.11 + pgvector 0.8.1）；
+  `uv run pytest` **100 passed**；真实服务验证：库在跑时页面显示「文档 N · 块 M」，
+  停库后显示友好提示
+- 运维备注：便携实例是**项目本地**的，不随开机自启、也不注册系统服务——
+  重启或长时间不用后，用 WebUI 前先 `aris db start`（要局域网用还需设
+  `ARIS_WEBUI_PASSWORD`，见上一条）
+
 ### 2026-09-18：WebUI 免鉴权模式（未配密码时可直连，只绑本机）
 
 - 起因：没设 `ARIS_WEBUI_PASSWORD` 时 WebUI **进不去**——`check_password()` 恒返回

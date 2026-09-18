@@ -152,8 +152,11 @@ def is_running(env: PgEnv) -> bool:
     """实例是否正在运行（未安装或未初始化一律视为未运行）。
 
     只看 ``pg_ctl status`` 不够：崩溃后残留的 ``postmaster.pid``（PID 被复用、
-    或换了 PID 命名空间）会让它报"在运行"。故再用 ``pg_isready`` 真实探一次——
-    连接被拒即认定未运行，避免 ``aris db start`` 因此拒绝启动。
+    或换了 PID 命名空间）会让它报"在运行"。故再用 ``pg_isready`` 真实探一次。
+
+    退出码语义：``0`` 接受连接、``1`` 服务器在线但拒绝本次探测（例如默认库不存在、
+    或正在启动中）、``2`` 无响应、``3`` 参数不合法——**只有 0/1 算在跑**，
+    否则启动流程会在"库还没建好"时误判成没起、重复去启一个已经起来的实例。
     """
     if not env.installed or not (env.pgdata / "PG_VERSION").exists():
         return False
@@ -169,7 +172,21 @@ def is_running(env: PgEnv) -> bool:
         capture_output=True,
         text=True,
     )
-    return ready.returncode == 0
+    return ready.returncode in (0, 1)
+
+
+def _clear_stale_pidfile(env: PgEnv) -> bool:
+    """清理「服务已不在但 pidfile 还在」的残留（崩溃 / 命名空间回收后常见）。
+
+    返回是否真的清了。``pg_ctl start`` 会因为锁文件存在而拒绝启动，且它判断
+    "是否还有 postmaster"靠的就是这个 pid——PID 被复用时必然误判，故这里直接清掉。
+    """
+    pid_file = env.pgdata / "postmaster.pid"
+    if not pid_file.exists():
+        return False
+    logger.warning(f"发现残留 {pid_file.name}（服务实际无响应），清理后继续")
+    pid_file.unlink(missing_ok=True)
+    return True
 
 
 def _log_tail(env: PgEnv, lines: int = 5) -> str:
@@ -184,6 +201,7 @@ def start(env: PgEnv) -> bool:
     """启动服务；已在运行则返回 False（无操作）。"""
     if is_running(env):
         return False
+    _clear_stale_pidfile(env)
     env.run_dir.mkdir(parents=True, exist_ok=True)
     env.log_file.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -216,8 +234,9 @@ def start(env: PgEnv) -> bool:
 
 
 def stop(env: PgEnv) -> bool:
-    """停止服务；本就未运行则返回 False（无操作）。"""
+    """停止服务；本就未运行则返回 False（无操作，顺手清残留 pidfile）。"""
     if not is_running(env):
+        _clear_stale_pidfile(env)
         return False
     _run([str(env.tool("pg_ctl")), "-D", str(env.pgdata), "-m", "fast", "-w", "stop"])
     return True
