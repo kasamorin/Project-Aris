@@ -63,7 +63,8 @@
   也已跑通（`aris store info|embed`）。**`store/` 三块地基（PG 环境 / embedding /
   迁移 + 向量检索 helper）已齐**。
 - **知识库首期可用（2026-09-18）**：`knowledge/` 两表 + 分块 + 摄入 + 检索全链路跑通，
-  CLI `aris knowledge add|list|remove|search|reindex`；agent 工具与 WebUI 上传待后续。
+  CLI `aris knowledge add|list|remove|search|reindex`；agent 工具 `knowledge_search`
+  已接入并用脚本化 mock 验证工具往返；WebUI 上传待后续。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -237,7 +238,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   - 已实现（首期）：两表迁移（`knowledge_docs` / `knowledge_chunks`）、
     分块（标题层级 + 定长兜底重叠）、md / txt / html 载入、摄入（hash 幂等 +
     软删重建）、列举 / 移除 / 纯向量检索（带来源标识）
-  - 待实现：agent 工具 `knowledge_search`（D1）、WebUI 上传（B3 二阶段）
+  - 已实现（续）：agent 工具 `knowledge_search`（D1：与 `web_search` 并列、
+    **Aris 自主调用**，不做每轮自动注入；返回外层 JSON + 内部 markdown，
+    每条带来源路径、标题层级与距离）
+  - 待实现：WebUI 上传（B3 二阶段）
   详见 `developDoc/KNOWLEDGE-BASE.md`
 - `voice/` —— STT（语音识别）、TTS（语音合成）
 - `persona/` —— 人格系统（提示词工程起步，2026-08-12）：注册

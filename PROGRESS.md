@@ -6,6 +6,28 @@
 
 ## 最新状态
 
+### 2026-09-18：agent 工具 `knowledge_search`（脚本化 mock 验证工具往返）
+
+- 新增 `behavior/tools/knowledge_search.py` 并接入内置工具集：D1 定案落地——
+  与 `web_search` 并列，**由 Aris 自主调用**，不做每轮自动 RAG 注入；
+  工具只是薄壳，能力经总线 `knowledge.search` 取（不直接 import 业务实现）
+- 返回格式（D3）：外层 JSON
+  `{"type": "knowledge_search_results", "query", "count", "results"}`，
+  内部 markdown 省 token，每条为
+  `id. 标题｜路径 › 标题层级（距离 x.xxx）` + 缩进内容（单块截断 800 字）
+- **带距离是有意为之**：C4 定案「初期不设相似度阈值」，纯向量检索对无关查询
+  同样返回最近片段（实测 `0.229` 强相关 / `0.672` 弱相关），把距离交给 Aris
+  判断比硬设阈值稳妥；已写进 KNOWLEDGE-BASE 5.4
+- 失败一律宽容降级（返回 JSON 说明，不抛到 UI）：query 为空 / top_k 非法 /
+  总线异常 / 库为空 / 知识库关闭
+- 测试 `tests/test_knowledge_tool.py` **7 例**：返回格式与来源标注、top_k、
+  弱命中带距离、关闭态、空结果（替换总线调用，无需库）、参数非法，
+  以及**脚本化 mock 的 agent loop 往返**（第 1 次请求回 tool_calls → 工具执行 →
+  第 2 次请求回最终回答，恰 2 次请求）
+- 另跑了一次可见演示：mock 提供商下 Aris 自主调用工具，工具返回带来源的片段，
+  最终答出「NAS 的 IP 是 192.168.1.20，端口 5000」
+- `uv run pytest`：**85 passed**；下一步 WebUI 上传（B3 二阶段）
+
 ### 2026-09-18：知识库首期实现完成（`knowledge/` 摄入 → 检索全链路）
 
 - **合并**：`store/` 与方案定案已并入 `develop`（merge commit `273a0cf`），

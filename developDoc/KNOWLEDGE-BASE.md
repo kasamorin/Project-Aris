@@ -257,8 +257,17 @@ skill 是**外部扩展接口**，内部模块绕经 skill 只增一层壳与延
   「知识库的向量维度为什么选 384」命中 C1 段落（top-3 内），来源路径与标题路径
   一并返回；测试数据已移除
 
-**待实现**：agent 工具 `knowledge_search`（D1）、WebUI 上传（B3 二阶段）、
-PDF 与混合检索（第二阶段）。
+**已实现（续，2026-09-18）**：agent 工具 `knowledge_search`
+（`behavior/tools/knowledge_search.py`，随内置工具集注册）——D1 定案落地：
+与 `web_search` 并列、**由 Aris 自主调用**，不依赖每轮自动注入。返回 D3 约定格式
+`{"type": "knowledge_search_results", "query", "count", "results"}`，内部 markdown，
+每条为 `id. 标题｜路径 › 标题层级（距离 x.xxx）` + 缩进内容。
+
+> **为什么带距离**：C4 定案「初期不设相似度阈值」，纯向量检索对无关查询同样会返回
+> 最近的若干片段（实测同名文档内 `0.229` 强相关 / `0.672` 弱相关），把距离交给
+> Aris 判断比硬设阈值更稳妥；将来若加 rerank / 混合检索，再评估是否引入阈值。
+
+**待实现**：WebUI 上传（B3 二阶段）、PDF 与混合检索（第二阶段）。
 
 ---
 
