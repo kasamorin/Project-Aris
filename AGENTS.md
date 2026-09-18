@@ -49,19 +49,23 @@
 - 当前版本 **v0.3.1**（2026-08-30）。
 - 骨架、LLM 接入、文字对话、行为扩展（函数调用）、联网搜索、人格系统均已完成。
 - WebUI 管理后台已完成（2026-08-23）：登录鉴权、仪表盘、审计、提供商管理、
-  技能管理、配置管理、日志查看。
+  技能管理、配置管理、日志查看；**知识库管理页 `/knowledge` 已补（2026-09-18）**。
 - **WebUI 安全审查与总线化改造已完成（2026-08-30）**：路径穿越/TOML 注入/XSS/
   鉴权绕过等安全漏洞全部修复；webui 全部路由改走 `core.call`（16 个总线服务 +
   启动自检）；新增 11 个关键路径测试（总计 48 通过）；pre-commit 分支保护 +
   `scripts/release-check.sh` 发布检查落地。详 `developDoc/SECURITY-AND-REFACTOR-PLAN.md`。
-- **知识库（Knowledge Base）方案商讨中（2026-09-14 起）**：定位为**面向外部资料的
-  独立 RAG 知识检索能力**，与 Aris 个人记忆**分开**。分支 `feat/knowledge-base`，
-  商讨稿见 `developDoc/KNOWLEDGE-BASE.md`。**A/B/C/D 全部议题与数据库部署均已定案**
-  （2026-09-18，见「已定案」）；下一步按「`store/` 底层先行 → `knowledge/`」进入实现。
+- **知识库（Knowledge Base）已落地（2026-09-14 起商讨，2026-09-18 实现）**：定位为
+  **面向外部资料的独立 RAG 知识检索能力**，与 Aris 个人记忆**分开**。全部议题与部署
+  方式定案见 `developDoc/KNOWLEDGE-BASE.md`；`store/` 底层 + `knowledge/` 首期
+  + agent 工具 + WebUI 知识库页均已跑通（v0.4.0 发布内容）。
 - **数据库地基已跑通（2026-09-18）**：`store/` 的便携 PostgreSQL 17.11 + pgvector 0.8.1
   就位，`aris db init|start|stop|status|psql` 可用；本地 embedding（Bekko a25m，384 维）
   也已跑通（`aris store info|embed`）。**`store/` 三块地基（PG 环境 / embedding /
-  迁移 + 向量检索 helper）已齐**，下一步进 `knowledge/`。
+  迁移 + 向量检索 helper）已齐**。
+- **知识库首期可用（2026-09-18）**：`knowledge/` 两表 + 分块 + 摄入 + 检索全链路跑通，
+  CLI `aris knowledge add|list|remove|search|reindex`；agent 工具 `knowledge_search`
+  已接入并用脚本化 mock 验证工具往返；**WebUI 知识库页 `/knowledge` 也已落地**
+  （上传 → 后台摄入 → 轮询进度 → 列表/移除/检索试验/重建索引）。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -221,14 +225,26 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   - 已实现（2026-09-18 续二）：迁移机制（`migrate.py`：按 owner+version 记录、
     单事务应用、防历史改写）与 pgvector helper（`vector.py`：建 HNSW 索引 / upsert /
     近邻检索 / 维度读取；标识符校验 + 算子白名单）、CLI `aris db migrate`；
-    总线服务合计 8 个（`store.health` / `store.embed` / `store.migrate.*` / `store.vector.*`）
+    总线服务合计 10 个（`store.health` / `store.embed` / `store.embed_dimension` /
+    `store.connect` / `store.migrate.*` / `store.vector.*`）
   - 待实现：无既定项（将来按需扩展，如云端 provider）
 - `memory/` —— 记忆系统：Embedding + 数据库（复用 `store/`，不自建第二套）
-- `knowledge/` —— **知识库（2026-09-18 定案，尚未实现）**：面向外部资料的独立 RAG
+- `knowledge/` —— **知识库（2026-09-18 定案，首期已实现）**：面向外部资料的独立 RAG
   检索，含摄入、分块、来源管理、检索语义。**不做 skill**（属内部底层设施，经大总线
-  暴露 `knowledge.search` / `knowledge.ingest` / `knowledge.sources`）；启用开关为
+  暴露 `knowledge.ingest` / `knowledge.sources` / `knowledge.remove` /
+  `knowledge.search` / `knowledge.reindex`）；启用开关为
   `config/knowledge.toml` 的 `enabled`。**向量维度 384（本地 Bekko，非云端）**，
-  摄入走 CLI（`aris knowledge ...`），**agent 只拿检索工具、不给摄入权**。
+  摄入走 CLI（`aris knowledge add|list|remove|search|reindex`），
+  **agent 只拿检索工具、不给摄入权**。
+  - 已实现（首期）：两表迁移（`knowledge_docs` / `knowledge_chunks`）、
+    分块（标题层级 + 定长兜底重叠）、md / txt / html 载入、摄入（hash 幂等 +
+    软删重建）、列举 / 移除 / 纯向量检索（带来源标识）
+  - 已实现（续）：agent 工具 `knowledge_search`（D1：与 `web_search` 并列、
+    **Aris 自主调用**，不做每轮自动注入；返回外层 JSON + 内部 markdown，
+    每条带来源路径、标题层级与距离）
+  - 已实现（续二）：WebUI 知识库页 `/knowledge`（上传落盘 `data/knowledge/` +
+    后台摄入 + 轮询进度、文档列表与移除、检索试验、重建索引）
+  - 待实现：PDF 与混合检索（第二阶段）
   详见 `developDoc/KNOWLEDGE-BASE.md`
 - `voice/` —— STT（语音识别）、TTS（语音合成）
 - `persona/` —— 人格系统（提示词工程起步，2026-08-12）：注册
@@ -255,8 +271,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 开发路线
 
-> **当前聚焦：知识库准备（商讨中，2026-09-14 起）与记忆系统**（PostgreSQL +
-> pgvector）。WebUI 管理后台已完成（v0.3.0，2026-08-23），详见 `developDoc/WEBUI.md`。
+> **当前聚焦：知识库首期已完成（v0.4.0，2026-09-18）**；下一步候选：真 API 实测 /
+> 知识库第二阶段（PDF、混合检索）/ 记忆系统（`memory/` 复用 `store/`）。
+> WebUI 管理后台见 `developDoc/WEBUI.md`。
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
@@ -269,9 +286,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 7. 行为扩展（函数调用 / MCP 服务器 / Skills）—— **函数调用已完成**（2026-08-09），
    MCP / Skills 待后续；联网搜索已完成（Bing 直连 + Tavily 兜底）
 8. GraphRAG
-9. 知识库（独立 RAG 知识检索）—— **方案已定案（2026-09-18）**：定位为面向外部资料的
-   独立检索能力，与个人记忆分开；`store/` + `knowledge/` 两模块、摄入与检索接口、
-   存储与切分、数据库部署均已定。**实现次序：`store/` 底层先行**。
+9. 知识库（独立 RAG 知识检索）—— **已完成首期（2026-09-18，随 v0.4.0 发布）**：
+   `store/` 三块地基（PG 环境 / embedding / 迁移 + 向量检索 helper）+ `knowledge/`
+   （两表、分块、摄入、检索）+ agent 工具 `knowledge_search` + WebUI 知识库页
+   `/knowledge`。**待续**：PDF 与混合检索（第二阶段）。
    详见 `developDoc/KNOWLEDGE-BASE.md`
 
 ## 已定案（直接照做，无需再确认）

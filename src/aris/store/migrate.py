@@ -90,6 +90,13 @@ def all_migrations() -> list[Migration]:
     return _registry.all()
 
 
+def _selected(migrations: Sequence[Migration] | None) -> list[Migration]:
+    """取本次要处理的迁移：显式传入优先（测试隔离用），否则用全局登记表。"""
+    if migrations is None:
+        return all_migrations()
+    return sorted(migrations, key=lambda m: (m.owner, m.version))
+
+
 def _applied(conn: Connection) -> dict[tuple[str, int], str]:
     """已应用迁移：(owner, version) → name。"""
     with conn.cursor() as cur:
@@ -97,9 +104,22 @@ def _applied(conn: Connection) -> dict[tuple[str, int], str]:
         return {(row[0], row[1]): row[2] for row in cur.fetchall()}
 
 
-def _check_drift(applied: dict[tuple[str, int], str]) -> None:
+def _ensure_tracking(conn: Connection) -> None:
+    """建跟踪表并**立刻提交**。
+
+    提交很关键：psycopg 的 ``conn.transaction()`` 在已有隐式事务时会退化成
+    SAVEPOINT，不提交就等于「迁移跑完即回滚」（实测踩到：迁移报成功但表不存在）。
+    """
+    with conn.cursor() as cur:
+        cur.execute(_TRACKING_DDL)
+    conn.commit()
+
+
+def _check_drift(
+    applied: dict[tuple[str, int], str], migrations: Sequence[Migration] | None = None
+) -> None:
     """已应用的迁移被改写（同名版本换了名字）时快速失败。"""
-    for m in all_migrations():
+    for m in _selected(migrations):
         recorded = applied.get((m.owner, m.version))
         if recorded is not None and recorded != m.name:
             raise MigrationError(
@@ -108,31 +128,36 @@ def _check_drift(applied: dict[tuple[str, int], str]) -> None:
             )
 
 
-def pending(conn: Connection | None = None) -> list[Migration]:
-    """尚未应用的迁移（升序）。"""
+def pending(
+    conn: Connection | None = None, *, migrations: Sequence[Migration] | None = None
+) -> list[Migration]:
+    """尚未应用的迁移（升序）。``migrations`` 显式给出时只用这些（测试用）。"""
     from .db import connect
 
     target = conn or connect()
-    with target.cursor() as cur:
-        cur.execute(_TRACKING_DDL)
+    _ensure_tracking(target)
     applied = _applied(target)
-    _check_drift(applied)
-    return [m for m in all_migrations() if (m.owner, m.version) not in applied]
+    _check_drift(applied, migrations)
+    return [m for m in _selected(migrations) if (m.owner, m.version) not in applied]
 
 
-def pending_ids(conn: Connection | None = None) -> list[str]:
+def pending_ids(
+    conn: Connection | None = None, *, migrations: Sequence[Migration] | None = None
+) -> list[str]:
     """尚未应用的迁移 id 列表。"""
-    return [m.id for m in pending(conn)]
+    return [m.id for m in pending(conn, migrations=migrations)]
 
 
-def run(conn: Connection | None = None) -> list[str]:
+def run(
+    conn: Connection | None = None, *, migrations: Sequence[Migration] | None = None
+) -> list[str]:
     """应用全部待执行迁移，返回本次实际应用的 id 列表（幂等）。"""
     from .db import connect
 
     target = conn or connect()
-    with target.cursor() as cur:
-        cur.execute(_TRACKING_DDL)
-    todos = pending(target)
+    _ensure_tracking(target)
+    todos = pending(target, migrations=migrations)
+    target.commit()  # 清掉查询留下的隐式事务，保证下面每条迁移都是独立事务
     done: list[str] = []
     for m in todos:
         logger.info(f"应用迁移 {m.id} {m.name}")
@@ -149,6 +174,7 @@ def run(conn: Connection | None = None) -> list[str]:
             raise MigrationError(f"迁移 {m.id} 执行失败：{exc}") from exc
         done.append(m.id)
     if done:
+        target.commit()  # 交给调用方前确保落盘（DDL 已提交，此处是保险）
         logger.success(f"迁移完成，应用 {len(done)} 条：{', '.join(done)}")
     else:
         logger.info("schema 已是最新，无需迁移")

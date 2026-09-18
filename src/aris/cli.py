@@ -534,8 +534,17 @@ def _cmd_web(args: argparse.Namespace) -> int:
     host = args.host or web_config.host
     port = args.port or web_config.port
 
+    # 护栏：未配置 ARIS_WEBUI_PASSWORD 时只绑回环（免鉴权模式不允许裸奔到局域网）
+    from .webui.auth import is_password_configured, resolve_bind_host
+
+    host, warning = resolve_bind_host(host)
+    if warning:
+        logger.warning(warning)
+
     import uvicorn
     app = create_app()
+    if not is_password_configured():
+        logger.warning("WebUI 运行在免鉴权模式：任何能访问该地址的请求都视为已登录")
     logger.info(f"WebUI 启动：http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="info")
     return 0
@@ -653,6 +662,65 @@ def _cmd_db(args: argparse.Namespace) -> int:
         return subprocess.call([str(env.tool("psql")), *args.psql_args], env=env.tool_env())
 
     logger.error(f"未知的 db 子命令: {action}")
+    return 1
+
+
+def _cmd_knowledge(args: argparse.Namespace) -> int:
+    """知识库：add / list / remove / search / reindex。"""
+    from aris.knowledge import KnowledgeError, get_service
+
+    service = get_service()
+    action = args.knowledge_command
+
+    try:
+        if action == "add":
+            outcomes = service.ingest(args.paths)
+            for item in outcomes:
+                tail = f"  ({item['reason']})" if item["reason"] else ""
+                print(f"{item['status']:>7}  {item['chunks']:>4} 块  {item['path']}{tail}")
+            print(f"共处理 {len(outcomes)} 个文件")
+            return 0
+
+        if action == "list":
+            sources = service.list_sources()
+            if not sources:
+                print("知识库为空（用 aris knowledge add <路径> 摄入）")
+                return 0
+            for item in sources:
+                print(f"{item['chunks']:>4} 块  {item['bytes']:>9} B  {item['source_path']}")
+            print(f"共 {len(sources)} 个文档")
+            return 0
+
+        if action == "remove":
+            info = service.remove(args.path)
+            if info["removed"]:
+                print(f"已移除 {info['source_path']}（{info['chunks']} 块）")
+            else:
+                print(f"未找到活跃文档：{info['source_path']}")
+            return 0
+
+        if action == "search":
+            result = service.search(args.query, limit=args.top_k)
+            if not result["results"]:
+                print("无结果")
+                return 0
+            for hit in result["results"]:
+                heading = f" › {hit['heading_path']}" if hit["heading_path"] else ""
+                print(
+                    f"[{hit['id']}] {hit['source_path']}{heading}"
+                    f"  distance={hit['distance']:.4f}"
+                )
+                print("    " + hit["content"][:200].replace("\n", " "))
+            return 0
+
+        if action == "reindex":
+            print(f"索引已就绪：{service.ensure_index()}")
+            return 0
+    except KnowledgeError as e:
+        logger.error(str(e))
+        return 1
+
+    logger.error(f"未知的 knowledge 子命令: {action}")
     return 1
 
 
@@ -836,6 +904,23 @@ def main(argv: list[str] | None = None) -> int:
     p_store_embed.add_argument("text", nargs="*", help="待编码文本")
     p_store_embed.set_defaults(func=_cmd_store)
 
+    p_kb = sub.add_parser("knowledge", help="知识库（摄入 / 列举 / 移除 / 检索）")
+    p_kb_sub = p_kb.add_subparsers(dest="knowledge_command")
+    p_kb_add = p_kb_sub.add_parser("add", help="摄入文件或目录（递归；md / txt / html）")
+    p_kb_add.add_argument("paths", nargs="+", help="文件或目录路径")
+    p_kb_add.set_defaults(func=_cmd_knowledge)
+    p_kb_list = p_kb_sub.add_parser("list", help="列出已摄入文档")
+    p_kb_list.set_defaults(func=_cmd_knowledge)
+    p_kb_remove = p_kb_sub.add_parser("remove", help="移除一个文档及其块（软删）")
+    p_kb_remove.add_argument("path", help="文档路径")
+    p_kb_remove.set_defaults(func=_cmd_knowledge)
+    p_kb_search = p_kb_sub.add_parser("search", help="纯向量检索（带来源标识）")
+    p_kb_search.add_argument("query", help="检索词")
+    p_kb_search.add_argument("--top-k", type=int, default=None, help="返回条数（默认读配置）")
+    p_kb_search.set_defaults(func=_cmd_knowledge)
+    p_kb_reindex = p_kb_sub.add_parser("reindex", help="建 HNSW 索引（幂等）")
+    p_kb_reindex.set_defaults(func=_cmd_knowledge)
+
     # `db psql` 之后的参数不参与 argparse（-c 这类选项会被误判），解析前先摘出
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     parse_argv, psql_args = _extract_psql_passthrough(raw_argv)
@@ -846,7 +931,7 @@ def main(argv: list[str] | None = None) -> int:
     # doctor / db / store 是环境与调试命令，始终显示 INFO 级别以便查看进度与结果
     console_level = (
         "INFO"
-        if (args.verbose or args.command in ("doctor", "db", "store"))
+        if (args.verbose or args.command in ("doctor", "db", "store", "knowledge"))
         else None
     )
     # chat 命令默认不向控制台输出日志——全屏 TUI 由 prompt_toolkit 接管终端，
@@ -865,7 +950,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     # 注册模块级总线服务（各模块在 import 时自注册；此处只挂轻量模块）
-    import aris.store  # noqa: F401  —— 注册 store.health 等
+    import aris.knowledge  # noqa: F401  —— 注册 knowledge.* 与建表迁移
+    import aris.store  # noqa: F401  —— 注册 store.*
 
     if args.command == "llm" and args.llm_command is None:
         p_llm.print_help()
@@ -877,6 +963,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "store" and args.store_command is None:
         p_store.print_help()
+        return 0
+
+    if args.command == "knowledge" and args.knowledge_command is None:
+        p_kb.print_help()
         return 0
 
     return args.func(args)

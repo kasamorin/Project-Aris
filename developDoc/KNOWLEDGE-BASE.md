@@ -5,8 +5,9 @@
 > 并在 `AGENTS.md` 的「已定案」中登记一句摘要。
 
 - 起始日期：2026-09-14
-- 开发分支：`feat/knowledge-base`（从 `develop` @ `7f0b4dd` 拉取）
-- 阶段：**全部议题已定案**（A/B/C/D，2026-09-18），尚未写代码；实现次序：`store/` 底层先行
+- 开发分支：`feat/knowledge`（`store/` 部分已并入 `develop` @ `273a0cf`）
+- 阶段：**首期已实现（2026-09-18）**——A/B/C/D 全部议题与部署方式均已定案，
+  `store/` 三块地基 + `knowledge/` 首期（两表 / 分块 / 摄入 / 检索）已跑通
 
 ---
 
@@ -122,9 +123,9 @@ pgvector 在 glibc Linux + GCC/Clang 上会自动启用 `USE_TARGET_CLONES`
   模型缓存落 `data/models`（约 224MB）。
 - **迁移与向量 helper（2026-09-18 续）**：`aris db migrate` 可用；临时表上实测
   「建 HNSW 索引 → upsert → 余弦近邻检索 → where 过滤 → 维度读取」全链路通过，
-  集成用例在 PG 未运行时自动跳过。`store/` 对外共 8 个总线服务：
-  `store.health` / `store.embed` / `store.migrate.run|pending` /
-  `store.vector.search|upsert|ensure_index|dimension`。
+  集成用例在 PG 未运行时自动跳过。`store/` 对外共 10 个总线服务：
+  `store.health` / `store.embed` / `store.embed_dimension` / `store.connect` /
+  `store.migrate.run|pending` / `store.vector.search|upsert|ensure_index|dimension`。
 - **重依赖打包（2026-09-18 定案）**：embedding 栈（sentence-transformers /
   `optimum[openvino]` / openvino / `transformers<5.1` / torch + torchvision）放
   **dependency-group `embedding` 并加入 `[tool.uv] default-groups`**：`uv sync` 一次装齐
@@ -150,7 +151,7 @@ pgvector 在 glibc Linux + GCC/Clang 上会自动启用 `USE_TARGET_CLONES`
 | 模块 | 职责 | 边界 |
 |---|---|---|
 | `store/` | embedding 抽象（文本 → 向量，Protocol + 多实现）+ PostgreSQL/pgvector 基础设施（DSN、连接池、迁移、向量检索 SQL helper） | **不认识** `knowledge/` / `memory/`，不做业务语义 |
-| `knowledge/` | 知识库业务：摄入、分块、来源管理、检索语义 | 经总线使用 `store/`，不直连 psycopg |
+| `knowledge/` | 知识库业务：摄入、分块、来源管理、检索语义 | 连接经总线 `store.connect` 取得（DSN/凭据归 store），业务 SQL 归自己 |
 
 - `memory/` 后续实现时**复用 `store/`**，不自建第二套连接/迁移/embedding。
 - **模型本体（Bekko 等）放 `data/models/`**，不进仓库（与「数据不进 git」一致）。
@@ -238,6 +239,41 @@ skill 是**外部扩展接口**，内部模块绕经 skill 只增一层壳与延
 
 **`store/` 底层先行**：PG 环境 bootstrap → 连接池 → 迁移 → embedding provider →
 建表 helper，跑通后再做 `knowledge/` 的摄入与检索；`memory/` 随后复用同一底层。
+
+### 5.4 实现状态（2026-09-18 首期完成）
+
+| 分层 | 文件 | 说明 |
+|---|---|---|
+| 表 | `knowledge/migrations.py` | `knowledge_docs`（文档级）+ `knowledge_chunks`（块级，384 维向量、冗余 source_path/title 以便单表检索） |
+| 载入 | `knowledge/loaders.py` | md / txt / html；html 用 BeautifulSoup 转 markdown（trafilatura 会抹平标题层级，实测弃用） |
+| 分块 | `knowledge/chunking.py` | 标题层级切 + 定长兜底重叠；代码围栏内的 `#` 不算标题 |
+| 业务 | `knowledge/service.py` | 摄入（hash 幂等 + 软删重建）/ 列举 / 移除 / 纯向量检索 / 建索引 |
+| 入口 | `aris knowledge add\|list\|remove\|search\|reindex` | 开关 `config/knowledge.toml: enabled` |
+
+**实测（2026-09-18）**：
+- `uv run pytest` **78 passed**，含端到端用例「摄入 → 幂等跳过 → 变更重建 →
+  检索带来源 → 移除后查不到」（数据库未运行时自动跳过）
+- CLI 冒烟：摄入 `developDoc/KNOWLEDGE-BASE.md` → 23 块；检索
+  「知识库的向量维度为什么选 384」命中 C1 段落（top-3 内），来源路径与标题路径
+  一并返回；测试数据已移除
+
+**已实现（续，2026-09-18）**：agent 工具 `knowledge_search`
+（`behavior/tools/knowledge_search.py`，随内置工具集注册）——D1 定案落地：
+与 `web_search` 并列、**由 Aris 自主调用**，不依赖每轮自动注入。返回 D3 约定格式
+`{"type": "knowledge_search_results", "query", "count", "results"}`，内部 markdown，
+每条为 `id. 标题｜路径 › 标题层级（距离 x.xxx）` + 缩进内容。
+
+> **为什么带距离**：C4 定案「初期不设相似度阈值」，纯向量检索对无关查询同样会返回
+> 最近的若干片段（实测同名文档内 `0.229` 强相关 / `0.672` 弱相关），把距离交给
+> Aris 判断比硬设阈值更稳妥；将来若加 rerank / 混合检索，再评估是否引入阈值。
+
+**已实现（续二，2026-09-18）**：WebUI 知识库页 `/knowledge`（B3 二阶段）——
+多文件上传（md / txt / html）→ 落盘 `data/knowledge/`（**同名覆盖**）→
+后台任务摄入 + 页面轮询进度；文档列表 / 移除 / 检索试验 / 重建索引。
+限额与目录见 `config/knowledge.toml`；安全上文件名只取 basename + 后缀白名单 +
+落盘前再校验父目录（防穿越）。详见 `developDoc/WEBUI.md`。
+
+**待实现**：PDF 与混合检索（第二阶段）。
 
 ---
 
