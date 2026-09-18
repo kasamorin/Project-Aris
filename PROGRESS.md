@@ -6,6 +6,26 @@
 
 ## 最新状态
 
+### 2026-09-18：议题 A（边界归属）/ D（检索侧）定案
+
+- **A 边界与归属**：新建两个顶层模块——
+  - `store/`：embedding 抽象（文本 → 向量）+ PostgreSQL/pgvector 基础设施
+    （DSN、连接池、迁移、向量检索 helper），**不认识** `memory/` / `knowledge/`
+  - `knowledge/`：知识库业务（摄入、分块、来源管理、检索语义）
+  - 依赖单向 `knowledge →（大总线）→ store`；`memory/` 后续复用 `store/`
+  - **模型本体放 `data/models/`**，不进仓库
+- **A3 不做 skill**：知识库属**内部底层设施**，能力经大总线暴露；skill 是外部扩展
+  接口，内部模块绕经它只增一层壳与延迟。启用开关 `config/knowledge.toml: enabled`。
+- **D 检索侧**：agent 工具**自主调用**（与 `web_search` 并列，不做每轮自动注入）；
+  第一阶段**纯向量**（混合检索 / rerank 列第二阶段）；结果格式沿用 web_search 约定
+  且**必带来源标识**（路径 + 标题 + 位置）；与记忆检索**两条独立通路**，不合并入口。
+- 总线服务（实施时落表）：`store.embed` / `store.health` / `store.migrate` /
+  `knowledge.search` / `knowledge.ingest` / `knowledge.sources`。
+- **新增待定**：用户计划给总线重新取名，届时统一调整既有 16 个服务命名。
+- 已同步 `AGENTS.md`（模块划分 / 已定案 / 待定 / 开发路线）；详
+  `developDoc/KNOWLEDGE-BASE.md` 第 4 节。本轮仅文档。
+- **下一步**：议题 B（摄入侧）/ C（存储切分）。
+
 ### 2026-09-18：数据库部署方案定案（前置阻塞解除）
 
 - **结论**：数据库环境**不依赖系统安装**，由项目脚本按需自动获取便携实例，
@@ -109,13 +129,17 @@
 6. 语音链路（STT → LLM → TTS）
 7. ✅ 行为扩展（函数调用 2026-08-09，联网搜索 2026-08-09）
 8. GraphRAG
+9. 知识库（独立 RAG 知识检索）—— **商讨中（2026-09-14 起）**：A/D 已定案，
+   B/C 待商讨；详见 `developDoc/KNOWLEDGE-BASE.md`
 
 ## 当前聚焦
 
-**知识库准备**（商讨中，2026-09-14 起）与**记忆系统**（PostgreSQL + pgvector）
+**知识库方案商讨**（2026-09-14 起）与**记忆系统**（PostgreSQL + pgvector）
 - 知识库：商讨稿见 `developDoc/KNOWLEDGE-BASE.md`，分支 `feat/knowledge-base`；
-  与记忆系统的边界、归属、次序均待商讨定案
-- 记忆系统：主线未取消，`memory/` 仍为占位；与知识库共享 PostgreSQL + pgvector 底层
+  **A 边界归属 / D 检索侧已定案**（新建 `store/` + `knowledge/`，2026-09-18），
+  **B 摄入侧 / C 存储切分待商讨**
+- 记忆系统：主线未取消，`memory/` 仍为占位；后续**复用 `store/`**（不自建第二套）
 - 共同前置：数据库环境部署方式**已定案**（2026-09-18，micromamba + conda-forge
   便携实例，脚本自动获取，见上文与 `developDoc/KNOWLEDGE-BASE.md` 第 3 节）
+- 新增待办：总线改名（用户提出，届时统一调整既有 16 个服务命名）
 - WebUI 管理后台已完成（v0.3.0，2026-08-23）
