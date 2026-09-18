@@ -45,9 +45,13 @@
                 </a>
             </div>
             <div class="p-4 border-t border-gray-200">
+                {% if auth_disabled %}
+                <div class="text-xs text-gray-400 px-2">免鉴权模式（本机）</div>
+                {% else %}
                 <a href="/logout" class="nav-item text-red-600">
                     <span>🚪</span> 退出
                 </a>
+                {% endif %}
             </div>
         </nav>
 

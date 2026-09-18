@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from loguru import logger
 from fastapi import APIRouter, BackgroundTasks, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
@@ -19,6 +20,15 @@ router = APIRouter()
 UPLOAD_ACCEPT = ".md,.markdown,.txt,.html,.htm"
 
 
+def _safe_status() -> dict:
+    """取知识库状态；数据库没起来时也要给页面一个可读的结果，而不是 500。"""
+    try:
+        return call("knowledge.status") or {}
+    except Exception as exc:  # noqa: BLE001 —— 管理后台宽容降级
+        logger.warning(f"知识库状态查询失败：{exc}")
+        return {"enabled": False, "error": str(exc), "docs": 0, "chunks": 0}
+
+
 @router.get("/knowledge", response_class=HTMLResponse)
 def knowledge_page(request: Request, q: str = "", top_k: int = 0) -> HTMLResponse:
     """知识库页面；带 q 参数时顺带做一次检索试验。
@@ -26,11 +36,18 @@ def knowledge_page(request: Request, q: str = "", top_k: int = 0) -> HTMLRespons
     刻意用同步 def：检索首次会加载本地模型（约 20s），走线程池不阻塞事件循环，
     否则 SSE 日志流与整站都会被卡住。
     """
-    status = call("knowledge.status") or {}
-    sources = call("knowledge.sources") if status.get("enabled") else []
+    status = _safe_status()
+    sources: list[dict] = []
+    if status.get("enabled") and not status.get("error"):
+        try:
+            sources = call("knowledge.sources") or []
+        except Exception as exc:  # 数据库不可用：页面照常显示，只是列表为空
+            logger.warning(f"知识库列表查询失败：{exc}")
+            status["error"] = str(exc)
+
     results: list[dict] = []
     search_error = ""
-    if q and status.get("enabled"):
+    if q and status.get("enabled") and not status.get("error"):
         try:
             payload = call("knowledge.search", q, limit=top_k or None)
             results = payload.get("results", [])
@@ -42,7 +59,7 @@ def knowledge_page(request: Request, q: str = "", top_k: int = 0) -> HTMLRespons
         {
             "active_page": "knowledge",
             "status": status,
-            "sources": sources or [],
+            "sources": sources,
             "jobs": [j.as_dict() for j in tasks.recent()],
             "query": q,
             "results": results,
@@ -99,12 +116,18 @@ def knowledge_job(job_id: str) -> JSONResponse:
 @router.post("/knowledge/remove")
 def knowledge_remove(path: str = Form(...)) -> RedirectResponse:
     """移除一个文档及其块（软删）。"""
-    call("knowledge.remove", path)
+    try:
+        call("knowledge.remove", path)
+    except Exception as exc:  # noqa: BLE001 —— 失败不炸页面，状态区会显示原因
+        logger.warning(f"移除文档失败：{exc}")
     return RedirectResponse("/knowledge", status_code=303)
 
 
 @router.post("/knowledge/reindex")
 def knowledge_reindex() -> RedirectResponse:
     """重建 HNSW 索引（幂等）。"""
-    call("knowledge.reindex")
+    try:
+        call("knowledge.reindex")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"重建索引失败：{exc}")
     return RedirectResponse("/knowledge", status_code=303)

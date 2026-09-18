@@ -1,8 +1,11 @@
 """鉴权中间件——密码登录 + HMAC 签名 cookie session。
 
-密码来源：.env 的 ARIS_WEBUI_PASSWORD。
-会话：aris_session cookie，payload 含签发时间 + 过期时间，HMAC-SHA256 签名。
-未配置密码时拒绝登录（不裸奔）。
+密码来源：.env 的 ARIS_WEBUI_PASSWORD。会话：aris_session cookie，payload 含签发
+时间 + 过期时间，HMAC-SHA256 签名。
+
+**无密码模式（2026-09-18 定案）**：未配置 `ARIS_WEBUI_PASSWORD` 时进入免鉴权模式
+（本机开发省事），但**只允许绑回环地址**——`resolve_bind_host()` 会把非回环地址
+降级为 127.0.0.1，避免管理后台裸奔到局域网。配置了密码则行为与以前完全一致。
 """
 
 from __future__ import annotations
@@ -22,6 +25,9 @@ from starlette.responses import RedirectResponse
 _SECRET = os.environ.get("ARIS_WEBUI_HMAC_SECRET", secrets.token_hex(32))
 _COOKIE_NAME = "aris_session"
 _DEFAULT_MAX_AGE = 7 * 24 * 3600  # 7 天
+
+# 回环地址（无密码模式只允许绑这些）
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
 
 # 不需要鉴权的路径：/login 精确匹配，/static/ 前缀匹配
 # （前缀过宽会让 /loginfoo 之类伪造路径绕过中间件，故分开处理）
@@ -75,13 +81,31 @@ def check_password(password: str) -> bool:
     return secrets.compare_digest(password, expected)
 
 
+def resolve_bind_host(host: str) -> tuple[str, str]:
+    """无密码模式的监听地址护栏。
+
+    返回 ``(实际绑定地址, 提示文本)``：未配置密码时，非回环地址一律降级为
+    ``127.0.0.1``（提示非空）；配置了密码则原样返回（提示为空）。
+    """
+    if is_password_configured() or host.strip() in _LOOPBACK_HOSTS:
+        return host, ""
+    return "127.0.0.1", (
+        f"未配置 ARIS_WEBUI_PASSWORD：已把监听地址从 {host} 降级为 127.0.0.1（免鉴权模式"
+        "仅限本机）。需要局域网访问请在 .env 里设置 ARIS_WEBUI_PASSWORD。"
+    )
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
-    """HTTP 中间件：未登录请求重定向到 /login。"""
+    """HTTP 中间件：未登录请求重定向到 /login；无密码模式直接放行。"""
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
         """中间件入口：公开路径放行，其余校验 session cookie，未登录重定向到 /login。"""
         path = request.url.path
         if _is_public(path):
+            return await call_next(request)
+
+        # 无密码模式：显式整段放行（不是"任意匹配即通过"，避免松匹配式绕过）
+        if not is_password_configured():
             return await call_next(request)
 
         # 检查 session cookie

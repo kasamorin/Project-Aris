@@ -534,8 +534,17 @@ def _cmd_web(args: argparse.Namespace) -> int:
     host = args.host or web_config.host
     port = args.port or web_config.port
 
+    # 护栏：未配置 ARIS_WEBUI_PASSWORD 时只绑回环（免鉴权模式不允许裸奔到局域网）
+    from .webui.auth import is_password_configured, resolve_bind_host
+
+    host, warning = resolve_bind_host(host)
+    if warning:
+        logger.warning(warning)
+
     import uvicorn
     app = create_app()
+    if not is_password_configured():
+        logger.warning("WebUI 运行在免鉴权模式：任何能访问该地址的请求都视为已登录")
     logger.info(f"WebUI 启动：http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="info")
     return 0
