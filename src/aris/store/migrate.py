@@ -97,6 +97,17 @@ def _applied(conn: Connection) -> dict[tuple[str, int], str]:
         return {(row[0], row[1]): row[2] for row in cur.fetchall()}
 
 
+def _ensure_tracking(conn: Connection) -> None:
+    """建跟踪表并**立刻提交**。
+
+    提交很关键：psycopg 的 ``conn.transaction()`` 在已有隐式事务时会退化成
+    SAVEPOINT，不提交就等于「迁移跑完即回滚」（实测踩到：迁移报成功但表不存在）。
+    """
+    with conn.cursor() as cur:
+        cur.execute(_TRACKING_DDL)
+    conn.commit()
+
+
 def _check_drift(applied: dict[tuple[str, int], str]) -> None:
     """已应用的迁移被改写（同名版本换了名字）时快速失败。"""
     for m in all_migrations():
@@ -113,8 +124,7 @@ def pending(conn: Connection | None = None) -> list[Migration]:
     from .db import connect
 
     target = conn or connect()
-    with target.cursor() as cur:
-        cur.execute(_TRACKING_DDL)
+    _ensure_tracking(target)
     applied = _applied(target)
     _check_drift(applied)
     return [m for m in all_migrations() if (m.owner, m.version) not in applied]
@@ -130,9 +140,9 @@ def run(conn: Connection | None = None) -> list[str]:
     from .db import connect
 
     target = conn or connect()
-    with target.cursor() as cur:
-        cur.execute(_TRACKING_DDL)
+    _ensure_tracking(target)
     todos = pending(target)
+    target.commit()  # 清掉查询留下的隐式事务，保证下面每条迁移都是独立事务
     done: list[str] = []
     for m in todos:
         logger.info(f"应用迁移 {m.id} {m.name}")
@@ -149,6 +159,7 @@ def run(conn: Connection | None = None) -> list[str]:
             raise MigrationError(f"迁移 {m.id} 执行失败：{exc}") from exc
         done.append(m.id)
     if done:
+        target.commit()  # 交给调用方前确保落盘（DDL 已提交，此处是保险）
         logger.success(f"迁移完成，应用 {len(done)} 条：{', '.join(done)}")
     else:
         logger.info("schema 已是最新，无需迁移")

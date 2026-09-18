@@ -63,6 +63,10 @@ class _FakeConn:
     def transaction(self):
         return nullcontext()
 
+    def commit(self) -> None:
+        """迁移流程会在关键点提交（否则 conn.transaction() 退化成 SAVEPOINT）；假连接只记账。"""
+        self.statements.append("COMMIT")
+
 
 def test_migration_runner_applies_in_version_order_and_is_idempotent():
     """乱序登记也按版本执行；重复运行不再应用（幂等）。

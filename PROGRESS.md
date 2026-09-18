@@ -6,6 +6,33 @@
 
 ## 最新状态
 
+### 2026-09-18：知识库首期实现完成（`knowledge/` 摄入 → 检索全链路）
+
+- **合并**：`store/` 与方案定案已并入 `develop`（merge commit `273a0cf`），
+  feature 分支 `feat/knowledge-base` 已删除；知识库实现在新分支 `feat/knowledge`
+- 新增 `knowledge/` 模块：
+  - `migrations.py`：两表迁移（owner=`knowledge`）——`knowledge_docs`（文档级，
+    路径 / hash / mtime / 状态）+ `knowledge_chunks`（块级，`vector(384)`，**冗余
+    source_path / title** 以便单表检索直接返回可引用信息）
+  - `loaders.py`：md / txt / html 载入；**html 用 BeautifulSoup 自行转 markdown**
+    （trafilatura 的 markdown 输出会把标题层级抹平，实测弃用），丢掉导航/页脚等噪声
+  - `chunking.py`：标题层级切 + 定长兜底重叠（代码围栏内的 `#` 不算标题，
+    超长段落按句子硬切，尾块过短并入前块）
+  - `service.py`：摄入（**content hash 幂等 + 软删重建**）/ 列举 / 移除 /
+    纯向量检索 / 建 HNSW 索引；总线服务 `knowledge.ingest|sources|remove|search|reindex`
+- CLI 新增 `aris knowledge add|list|remove|search|reindex`；开关
+  `config/knowledge.toml: enabled`；`store/` 补 `store.connect`（提供连接）与
+  `store.embed_dimension` 两个总线服务，合计 10 个
+- 修两处真实缺陷：① **迁移跑完即回滚**——psycopg 在已有隐式事务时
+  `conn.transaction()` 会退化成 SAVEPOINT，故跟踪表建好后必须先 `commit()` 再逐条迁移
+  （实测：迁移报成功但表不存在）；② `pg_ctl` 遇「残留进程占用共享内存」时，
+  错误信息现直接给出 `pkill -f <pgdata>` 的处理提示
+- 实测：`uv run pytest` **78 passed**（含端到端「摄入 → 幂等跳过 → 变更重建 →
+  检索带来源 → 移除后查不到」）；CLI 冒烟摄入 `developDoc/KNOWLEDGE-BASE.md` 得 23 块，
+  检索「知识库的向量维度为什么选 384」命中 C1 段落，测试数据已清理
+- **下一步**：agent 工具 `knowledge_search`（D1 定案：与 `web_search` 并列、
+  由 Aris 自主调用）；之后是 WebUI 上传（B3 二阶段）
+
 ### 2026-09-18：store/ 迁移机制与向量检索 helper 完成（`store/` 地基收尾）
 
 - `store/migrate.py`：自研轻量迁移——迁移以 Python 函数登记（按参数建表方便），

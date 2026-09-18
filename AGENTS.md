@@ -61,7 +61,9 @@
 - **数据库地基已跑通（2026-09-18）**：`store/` 的便携 PostgreSQL 17.11 + pgvector 0.8.1
   就位，`aris db init|start|stop|status|psql` 可用；本地 embedding（Bekko a25m，384 维）
   也已跑通（`aris store info|embed`）。**`store/` 三块地基（PG 环境 / embedding /
-  迁移 + 向量检索 helper）已齐**，下一步进 `knowledge/`。
+  迁移 + 向量检索 helper）已齐**。
+- **知识库首期可用（2026-09-18）**：`knowledge/` 两表 + 分块 + 摄入 + 检索全链路跑通，
+  CLI `aris knowledge add|list|remove|search|reindex`；agent 工具与 WebUI 上传待后续。
 - 最新进度、当前阻塞、待定决策、下一步 → 见 `PROGRESS.md`（每次开发前先读）。
 
 ## 编码约定（唯一权威，必须遵守；原 CODING-GUIDELINES.md 已并入本文）
@@ -221,14 +223,21 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   - 已实现（2026-09-18 续二）：迁移机制（`migrate.py`：按 owner+version 记录、
     单事务应用、防历史改写）与 pgvector helper（`vector.py`：建 HNSW 索引 / upsert /
     近邻检索 / 维度读取；标识符校验 + 算子白名单）、CLI `aris db migrate`；
-    总线服务合计 8 个（`store.health` / `store.embed` / `store.migrate.*` / `store.vector.*`）
+    总线服务合计 10 个（`store.health` / `store.embed` / `store.embed_dimension` /
+    `store.connect` / `store.migrate.*` / `store.vector.*`）
   - 待实现：无既定项（将来按需扩展，如云端 provider）
 - `memory/` —— 记忆系统：Embedding + 数据库（复用 `store/`，不自建第二套）
-- `knowledge/` —— **知识库（2026-09-18 定案，尚未实现）**：面向外部资料的独立 RAG
+- `knowledge/` —— **知识库（2026-09-18 定案，首期已实现）**：面向外部资料的独立 RAG
   检索，含摄入、分块、来源管理、检索语义。**不做 skill**（属内部底层设施，经大总线
-  暴露 `knowledge.search` / `knowledge.ingest` / `knowledge.sources`）；启用开关为
+  暴露 `knowledge.ingest` / `knowledge.sources` / `knowledge.remove` /
+  `knowledge.search` / `knowledge.reindex`）；启用开关为
   `config/knowledge.toml` 的 `enabled`。**向量维度 384（本地 Bekko，非云端）**，
-  摄入走 CLI（`aris knowledge ...`），**agent 只拿检索工具、不给摄入权**。
+  摄入走 CLI（`aris knowledge add|list|remove|search|reindex`），
+  **agent 只拿检索工具、不给摄入权**。
+  - 已实现（首期）：两表迁移（`knowledge_docs` / `knowledge_chunks`）、
+    分块（标题层级 + 定长兜底重叠）、md / txt / html 载入、摄入（hash 幂等 +
+    软删重建）、列举 / 移除 / 纯向量检索（带来源标识）
+  - 待实现：agent 工具 `knowledge_search`（D1）、WebUI 上传（B3 二阶段）
   详见 `developDoc/KNOWLEDGE-BASE.md`
 - `voice/` —— STT（语音识别）、TTS（语音合成）
 - `persona/` —— 人格系统（提示词工程起步，2026-08-12）：注册

@@ -35,6 +35,23 @@ from .embedding import EmbeddingError, EmbeddingProvider, get_provider
 from .pgenv import PgEnv, PgSource, detect
 
 
+def _embed_dimension() -> int:
+    """总线服务：当前 embedding provider 的向量维度（建表前要先问它）。"""
+    return get_provider().dimension
+
+
+def _connect() -> Any:
+    """总线服务：提供一个数据库连接（调用方负责关闭）。
+
+    边界：**「怎么连」由 store 决定**（DSN / 适配器 / 探针），但业务模块自己的
+    建表与业务 SQL 归各模块所有——它们经此服务取连接后自行执行，不再各自
+    处理 DSN 与凭据。
+    """
+    from .db import connect
+
+    return connect()
+
+
 def _health() -> dict[str, Any]:
     """总线服务：数据库探活。"""
     from .db import health
@@ -49,16 +66,20 @@ def _embed(texts: list[str]) -> list[list[float]]:
 
 def _migrate_run() -> list[str]:
     """总线服务：应用全部待执行迁移，返回本次应用的 id。"""
+    from .db import connect
     from .migrate import run
 
-    return run()
+    with closing(connect()) as conn:
+        return run(conn)
 
 
 def _migrate_pending() -> list[str]:
     """总线服务：列出待执行迁移 id。"""
+    from .db import connect
     from .migrate import pending_ids
 
-    return pending_ids()
+    with closing(connect()) as conn:
+        return pending_ids(conn)
 
 
 def _vector_search(table: str, query: list[float], **options: Any) -> list[dict[str, Any]]:
@@ -103,6 +124,8 @@ def _vector_dimension(table: str, column: str = "embedding") -> int | None:
 
 provide("store.health", _health)
 provide("store.embed", _embed)
+provide("store.embed_dimension", _embed_dimension)
+provide("store.connect", _connect)
 provide("store.migrate.run", _migrate_run)
 provide("store.migrate.pending", _migrate_pending)
 provide("store.vector.search", _vector_search)

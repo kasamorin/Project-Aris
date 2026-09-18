@@ -204,7 +204,14 @@ def start(env: PgEnv) -> bool:
         )
     except BootstrapError as exc:
         # pg_ctl 自身信息很少，把服务日志末尾一起抛出便于定位
-        raise BootstrapError(f"{exc}；服务日志：{_log_tail(env)}") from exc
+        tail = _log_tail(env)
+        hint = ""
+        if "pre-existing shared memory block" in tail or "another server might" in tail:
+            hint = (
+                "；检测到上次异常退出遗留的 postgres 进程仍占用共享内存"
+                f"（该实例仅属本项目，结束它即可）：pkill -f {env.pgdata}"
+            )
+        raise BootstrapError(f"{exc}；服务日志：{tail}{hint}") from exc
     return True
 
 
