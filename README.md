@@ -61,7 +61,7 @@ src/aris/
 ├── config.py       # 全局配置（pydantic-settings，ARIS_ 前缀）
 ├── logging.py      # loguru 统一日志
 ├── cfgtoml.py      # 模块级 toml 配置加载器（零依赖）
-├── core/           # 基础设施：统一通讯层（bus）+ LLM 提供方抽象
+├── core/           # 基础设施：跨模块通讯总线 CMCB（bus）+ LLM 提供方抽象
 │   ├── bus.py      #   服务注册表 + 事件总线 + 审计
 │   └── llm/        #   提供方抽象 / fallback / 流式 / 工具调用
 ├── persona/        # 人格（提示词工程起步）：system_prompt 服务
@@ -79,8 +79,8 @@ developDoc/         # 模块级开发文档
 referenceDocumentation/  # 候选参考文档
 ```
 
-模块间通讯统一经 `core.call` / `core.provide`（统一通讯层），架构见
-`developDoc/BUS-ARCHITECTURE.md`。
+模块间通讯统一经 `core.call` / `core.provide`（跨模块通讯总线 CMCB），架构见
+`developDoc/CMCB.md`。
 
 ## 数据与备份
 
@@ -97,7 +97,7 @@ referenceDocumentation/  # 候选参考文档
 | `developDoc/Project-Aris.md` | 项目蓝图 |
 | `developDoc/API-CALL.md` | LLM 接入与 core 模块 |
 | `developDoc/CONFIG.md` | 配置体系 |
-| `developDoc/BUS-ARCHITECTURE.md` | 统一通讯层 |
+| `developDoc/CMCB.md` | 跨模块通讯总线（CMCB） |
 | `developDoc/WEB-SEARCH.md` | 联网搜索方案 |
 | `developDoc/EMBEDDING.md` | 记忆 / Embedding 方案 |
 | `developDoc/LLM-PROVIDER-MGMT.md` | LLM 提供商与模型管理（list/check/fetch/退休机制） |
