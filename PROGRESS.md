@@ -6,6 +6,28 @@
 
 ## 最新状态
 
+### 2026-09-19：总线文档与注释统一改名 CMCB
+
+- 背景：总线 2026-09-18 已按职责定名**「跨模块通讯总线」**（Cross-Module
+  Communication Bus, CMCB），当时因涉及面大暂缓；本轮收口**称谓层**
+- 范围（用户拍定）：文档 + 代码注释一并统一；架构文档更名
+  `BUS-ARCHITECTURE.md` → `CMCB.md`（git mv 保留历史）；此前暂存的
+  C 通讯层结论两行并入首个改名提交
+- 改动：
+  - `CMCB.md`：标题与文首改称谓，补**命名沿革**注记（含「改称谓不改
+    标识符」的边界说明：`core/bus.py`、函数名、服务名当初即为降低
+    改名成本而设计，保持不变）
+  - `AGENTS.md`：模块划分 / 模块间调用规则 / 文档索引同步；「待定」节
+    改名条目划掉，定案落入「已定案」
+  - `README.md` 三处；`WEB-SEARCH.md` / `SECURITY-AND-REFACTOR-PLAN.md` /
+    `KNOWLEDGE-BASE.md`（改名待办注记改为已收口）引用点同步
+  - src 五个文件的中文注释 / docstring：`core/__init__` / `core/bus` /
+    `core/audit` / `chat/session` / `persona/__init__`
+- 惯例：PROGRESS 历史条目与历史提交中的旧名 / 旧文件名**不改写**
+- 验证：全仓 grep「统一通讯层」仅剩 CMCB.md 命名沿革中的有意保留；
+  `uv run pytest` **93 passed, 10 skipped**（DB 未运行自动跳过，无回归）
+- 合并路径：`docs/cmcb-rename` → `develop`（--no-ff）
+
 ### 2026-09-18：版本 v0.4.0 发布（知识库首期）
 
 - 版本号三源同步 bump 至 **v0.4.0**（minor 级：新增知识库整块能力）
@@ -397,5 +419,5 @@
 - 记忆系统：主线未取消，`memory/` 仍为占位；后续**复用 `store/`**（不自建第二套）
 - 数据库环境：部署方式已定案（micromamba + conda-forge 便携实例，脚本自动获取，
   见 `developDoc/KNOWLEDGE-BASE.md` 第 3 节）
-- 待办：总线改名（已定名 CMCB，涉及面大暂缓）
+- 待办：~~总线改名~~（已完成：2026-09-19 文档与注释统一 CMCB，见「最新状态」）
 - WebUI 管理后台已完成（v0.3.0，2026-08-23）
