@@ -42,7 +42,7 @@ TOOLS_SYSTEM_HINT = (
 
 
 def _default_system_prompt() -> str:
-    """默认系统提示词：经统一通讯层取 persona 人设，服务缺失时用兜底文本。"""
+    """默认系统提示词：经跨模块通讯总线（CMCB）取 persona 人设，服务缺失时用兜底文本。"""
     prompt = call("persona.system_prompt")
     return prompt if prompt else _FALLBACK_SYSTEM_PROMPT
 

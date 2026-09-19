@@ -211,8 +211,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 模块划分（对应 Project-Aris.md 蓝图）
 
-- `core/` —— 基础设施：统一通讯层（`bus.py` 服务注册表 + 事件总线 + 审计）+
-  LLM 提供方抽象（多提供方 fallback、流式、工具调用）
+- `core/` —— 基础设施：跨模块通讯总线 CMCB（`bus.py` 服务注册表 + 事件总线 +
+  审计）+ LLM 提供方抽象（多提供方 fallback、流式、工具调用）
 - `store/` —— **存储与向量基础设施（2026-09-18 定案）**：embedding 抽象
   （文本 → 向量，Protocol + 多实现）+ PostgreSQL/pgvector 基础设施（DSN、连接池、迁移、
   向量检索 helper）。**不认识 `memory/` / `knowledge/`**，不做业务语义；模型本体放
@@ -261,13 +261,13 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
   届时再评估是否独立成模块
 
-### 模块间调用规则（统一通讯层，2026-08-12 定案）
+### 模块间调用规则（跨模块通讯总线 CMCB，2026-08-12 定案）
 
 - 模块间通讯**一律走 `core.call` / `core.provide`**，不直接跨模块 import 调用
 - 核心类实例自注册（`__init__` 里 `provide` 自己的方法），命名 `module.service`
 - 明确不走总线的边界：对象构造/装配（依赖注入）、同模块内部调用、纯类型引用
   （如 Message）；CLI 组装根可保持直接引用
-- 服务表与架构详见 `developDoc/BUS-ARCHITECTURE.md`
+- 服务表与架构详见 `developDoc/CMCB.md`
 
 ## 开发路线
 
@@ -373,6 +373,11 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   勾选 UI→写回备份）；「本地有云无」模型进退休机制
   `config/retired_models.toml`（机器维护，宽限期 30 天自动删，`aris llm retired`
   手动删，回归自动恢复）。详 `developDoc/LLM-PROVIDER-MGMT.md`
+- **总线命名（2026-09-19 收口）**：定名**「跨模块通讯总线」**（Cross-Module
+  Communication Bus, **CMCB**）——`core/bus.py` 同时承载服务注册表 + 事件广播 +
+  审计查询，按职责命名。文档与代码注释统一用 CMCB 称谓（架构文档
+  `developDoc/CMCB.md`）；**代码标识符（模块文件 `core/bus.py`、函数名、服务名）
+  保持不变**——服务名前缀是模块名、函数名不含 `aris`，当初即为降低改名成本而设计
 
 ## 待定（勿替用户做决定）
 
@@ -386,10 +391,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   —— 交给 Aris（相当于「打断 + 继续听」）或丢弃并假装没听见（「装没听见」）。
   判断依据待定（如语气、上下文、用户意图）。实现前先定方案
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
-- **总线改名（待做，2026-09-18 定名）**：按职责命名——现行 `core/bus.py` 同时承载
-  **服务注册表（`provide`/`call`）+ 事件广播（`subscribe`/`emit`）+ 审计查询**，故定名
-  **「跨模块通讯总线」（Cross-Module Communication Bus, CMCB）**。**暂不改**：涉及既有
-  16 个服务命名与多处文档，改动面太大，留作待办，择期统一替换
+- ~~总线改名 CMCB~~（已完成：2026-09-19 文档与注释统一改名，见「已定案」）
 - ~~测试框架是否启用 pytest~~（已定：2026-08-18 启用 pytest，见技术栈）
 
 ## 文档索引（按需阅读）
@@ -398,7 +400,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 |---|---|
 | LLM 接入 / `core` 模块 | `developDoc/API-CALL.md` |
 | 配置文件体系（三源分工 / 收口原则） | `developDoc/CONFIG.md` |
-| 统一通讯层（`core.bus` 服务/事件/审计） | `developDoc/BUS-ARCHITECTURE.md` |
+| 跨模块通讯总线 CMCB（`core.bus` 服务/事件/审计） | `developDoc/CMCB.md` |
 | 技能系统（`behavior.skills`） | `developDoc/SKILLS.md` |
 | 联网搜索方案（演进历史 / 留档） | `developDoc/WEB-SEARCH.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |

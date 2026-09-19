@@ -72,7 +72,7 @@
 - 增加依赖面：`playwright` 包 + `playwright install firefox` 二进制下载。
 - 增加维护面：`BrowserManager`（惰性启动/孤儿进程清理/生命周期）+ 两个
   引擎的选择器解析（`.b_algo` / `div.g`），与「可维护性最高优先级」冲突。
-- 影响后续统一通讯层迁移（`browser.close` / `browser.cleanup` 服务）。
+- 影响后续跨模块通讯总线（CMCB）迁移（`browser.close` / `browser.cleanup` 服务）。
 
 **定案**：删除全部浏览器链路代码，Tavily 成为唯一主链路。
 

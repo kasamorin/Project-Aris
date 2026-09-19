@@ -92,7 +92,7 @@
   取全部聚合）、`skills.list/detail/create/save/delete`。
 - **`config.toml.read/write` 未走总线**：配置页读写是 `aris.cfgtoml` /
   `get_settings` 的**基础设施直连**，按「三层三源」设计属配置系统本身，
-  不视为模块间业务通讯（已记入 BUS-ARCHITECTURE.md 例外清单）。
+  不视为模块间业务通讯（已记入 CMCB.md 例外清单）。
 - 注册点：`core/llm/manage.py`（新建）、`core/llm/fetch.py` 与
   `behavior/skills/manager.py`（模块级追加）、`core/bus.py`（audit 服务）。
 - webui 侧：全部路由改 `core.call`；`create_app()` import 三个所有者模块
