@@ -30,6 +30,27 @@
 
 ## 最近动态
 
+### 2026-09-19：serve 收尾——组装根上收 + doctor 合流探针（SERVE.md 第 4–5 步）
+
+- **唯一组装根**：`serve.assemble()` 成为唯一一份「import 哪些所有者模块」的清单；
+  `webui.create_app()` 只搭 HTTP 层（原先它自己 import `llm.fetch`/`llm.manage`/
+  `skills` 并调 `_verify_bus_services()`，与 `cli.py` 那套重复、必然漂移）；
+  测试改在 `tests/conftest.py` 调 `assemble()`（测试也是宿主）
+- **依赖清单仍归各模块自己声明**：`webui._REQUIRED_SERVICES` → 公开的
+  `webui.REQUIRED_SERVICES`，由新增的 `services` 步骤（required）统一核验——原实现
+  只有 WebUI 那条路径会被检查
+- **`aris doctor` 合流**：环境自检（Python / C 扩展 / .env / 数据目录）+
+  `serve.probe_all()`，与 `aris serve --dry-run` 走同一条探针路径；LLM 体检收敛为
+  总线服务 `llm.providers.check`（`aris llm check`、doctor、serve 探针共用一份结论，
+  原先判断散在 CLI 里）
+- 顺带：serve 的 `core.llm` 探针现在会把体检错误直接报出来（`✗` + 首个错误 +
+  `aris llm check` 提示），不再只数提供方个数
+- 实测：`aris doctor` 八项探针全绿并给出可操作结论；`aris serve --dry-run` 8 步；
+  `aris web` 起服务 GET `/` → 200，第二个实例被端口探测拒绝（exit 1，错误文案明确）；
+  `uv run pytest` **102 passed, 10 skipped**
+- 剩余缺口（SERVE.md §10）：工具注册表 / agent loop / LLM engine 仍是会话级对象，
+  等 #4/#7 时由 serve 上收；退出细节（二次 Ctrl-C、退出码明细）待定
+
 ### 2026-09-19：serve 首期实现（`aris serve` 可用）
 
 - 新增 `src/aris/serve/{__init__,conf,steps}.py`：组装根 `assemble()`（集中 import 触发

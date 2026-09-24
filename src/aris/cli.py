@@ -49,23 +49,18 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     settings = get_settings()
     logger.info(f"数据目录: {settings.data_dir}")
 
-    # LLM 配置体检摘要（不影响 doctor 整体退出码，详情见 aris llm check）
-    try:
-        from aris.core.llm import load_providers
-        from aris.core.llm.config import ProviderConfigError
+    # 模块状态：与 `aris serve` 共用同一份探针（不再各写一套自检）
+    from .serve import probe_all
 
-        providers = load_providers(settings.llm_providers_file)
-    except ProviderConfigError as e:
-        logger.error(f"LLM 配置: {e}")
-    else:
-        issues = _collect_check_issues(providers)
-        if issues:
-            err_count = sum(1 for level, _ in issues if level == "error")
-            logger.warning(
-                f"LLM 配置: {len(issues)} 个问题（{err_count} 个错误），运行 aris llm check 查看详情"
-            )
-        else:
-            logger.success("LLM 配置: 通过")
+    outcomes = probe_all()
+    for outcome in outcomes:
+        (logger.success if outcome.status == "ok" else logger.warning)(outcome.line)
+    failed_required = [
+        o for o in outcomes if o.status == "failed" and o.step.level == "required"
+    ]
+    if failed_required:
+        logger.error(f"{len(failed_required)} 个必需项未就绪，按上面提示处理后重试")
+        ok = False
 
     if ok:
         logger.success("环境自检通过")
@@ -122,39 +117,17 @@ def _cmd_llm_list(args: argparse.Namespace) -> int:
     return 0
 
 
-def _collect_check_issues(providers) -> list[tuple[str, str]]:
-    """收集配置体检问题：[(level, message)]，level ∈ error / warning。"""
-    issues: list[tuple[str, str]] = []
-    known = {p.id for p in providers.providers}
-    for pid in providers.order:
-        if pid not in known:
-            issues.append(("error", f"default_provider_order 引用不存在的提供方: {pid}"))
-    for p in providers.providers:
-        if not p.models:
-            issues.append(("error", f"提供方 {p.id} 模型列表为空"))
-        if not os.environ.get(p.api_key_env):
-            issues.append(("error", f"提供方 {p.id} 缺 API key：请在 .env 设置 {p.api_key_env}"))
-    if not providers.default_model:
-        issues.append(("warning", "default_model 未配置，CLI 将自动兜底取第一个可用模型"))
-    elif providers.default_model not in providers.all_model_ids():
-        issues.append(
-            ("warning", f"default_model {providers.default_model} 不存在于任何提供方，将自动兜底")
-        )
-    return issues
-
-
 def _cmd_llm_check(args: argparse.Namespace) -> int:
     """配置体检：重复 id / order 引用 / 缺 key / 默认模型，有问题非零退出。"""
-    from aris.core.llm import load_providers
+    from aris.core import call
+    from aris.core.llm import manage as _manage  # noqa: F401 —— 触发 llm.providers.* 注册
     from aris.core.llm.config import ProviderConfigError
 
-    settings = get_settings()
     try:
-        providers = load_providers(settings.llm_providers_file)
+        issues = call("llm.providers.check") or []
     except ProviderConfigError as e:
         logger.error(str(e))
         return 1
-    issues = _collect_check_issues(providers)
     if not issues:
         logger.success("LLM 配置体检通过")
         return 0
@@ -520,9 +493,11 @@ def _cmd_llm_retired(args: argparse.Namespace) -> int:
 
 
 def _cmd_web(args: argparse.Namespace) -> int:
-    """启动 WebUI 管理后台（组装与端口探测由 webui 模块自己做，见 serve 模块）。"""
+    """启动 WebUI 管理后台（组装走 serve.assemble()，端口探测归 webui 模块）。"""
+    from .serve import assemble
     from .webui import start_server
 
+    assemble()
     try:
         start_server(host=args.host, port=args.port)
     except RuntimeError as exc:  # 端口冲突等：给出可读错误而不是栈

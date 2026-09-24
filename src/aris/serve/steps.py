@@ -36,8 +36,24 @@ class ServeStep:
     blocks: bool = False  # True = 阻塞步骤（WebUI），编排方最后调用
 
 
+def _probe_services() -> str:
+    """探针：组装后的服务表是否覆盖各模块声明的依赖（缺一即报，不静默）。
+
+    清单由各模块自己声明（如 `webui.REQUIRED_SERVICES`），serve 只负责启动时统一
+    核验——原实现散在 `webui.create_app()` 里，只有 WebUI 那条路径会被检查。
+    """
+    from ..webui import REQUIRED_SERVICES
+
+    missing = [name for name in REQUIRED_SERVICES if not has_service(name)]
+    if missing:
+        raise RuntimeError(
+            f"缺少服务：{', '.join(missing)}——检查组装根是否 import 到了所有者模块"
+        )
+    return f"各模块声明的 {len(REQUIRED_SERVICES)} 个依赖服务全部就绪"
+
+
 def _probe_llm() -> str:
-    """探针：LLM 配置可读、有可用提供方、审计与 http 服务已注册。"""
+    """探针：LLM 配置可读、有可用提供方、体检无错误、审计与 http 服务已注册。"""
     from ..core.llm import load_providers
 
     config = load_providers(get_settings().llm_providers_file)
@@ -48,7 +64,13 @@ def _probe_llm() -> str:
     missing = [s for s in ("audit.recent", "audit.summary", "http.request") if not has_service(s)]
     if missing:
         raise RuntimeError(f"缺少服务：{', '.join(missing)}")
-    return f"{len(config.providers)} 个提供方 / {models} 个模型，默认 {default}"
+    issues = call("llm.providers.check") or []
+    errors = [message for level, message in issues if level == "error"]
+    if errors:
+        raise RuntimeError(f"LLM 配置 {len(errors)} 个错误：{errors[0]}（详情 `aris llm check`）")
+    warnings = len(issues) - len(errors)
+    tail = f"；{warnings} 个警告" if warnings else ""
+    return f"{len(config.providers)} 个提供方 / {models} 个模型，默认 {default}{tail}"
 
 
 def _probe_persona() -> str:
@@ -165,6 +187,7 @@ def build_steps(config: ServeConfig) -> list[ServeStep]:
     """按配置生成步骤表（列表顺序 = 启动顺序）。"""
     embed_start = _start_embed if config.preload_embedding else None
     return [
+        ServeStep("services", "services", _probe_services, level="required"),
         ServeStep("core", "core.llm", _probe_llm),
         ServeStep("persona", "persona", _probe_persona),
         ServeStep("behavior", "behavior", _probe_behavior),
