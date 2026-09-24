@@ -1,5 +1,11 @@
 # Aris
 
+> ## 🎉 隆重发布 **v0.4.2**（beta）
+>
+> **`uv sync` → `cp .env.example .env` → `aris serve`** —— 一条命令拉起全套：便携
+> PostgreSQL + pgvector（缺则自动获取）、本地 embedding 后台预热、知识库建表、WebUI
+> 管理后台并入；LLM 文字对话、函数调用、联网搜索、人格系统与知识库 RAG 检索均已跑通。
+
 拟人 AI「Aris」，参考 Neuro-sama，目标是「社会学意义上的人」：长期独立人格、
 持续演进的世界观、人际关系网和成长轨迹。纯个人项目，但以可维护性为最高优先级，
 目标运行数年。

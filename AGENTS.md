@@ -46,9 +46,10 @@
 
 ## 现状
 
-- 当前版本 **v0.4.1**（2026-09-19）。**这是首个「clone 下来一条命令起服务」的版本**：
-  `uv sync` → `cp .env.example .env` → `aris serve` 即可（首次自动获取便携 PG，需联网
-  数分钟），WebUI 落在 `http://127.0.0.1:9690`。
+- 当前版本 **v0.4.2（beta，2026-09-24）**。**这是首个「clone 下来一条命令起服务」的
+  版本**：`uv sync` → `cp .env.example .env` → `aris serve` 即可（首次自动获取便携 PG，
+  需联网数分钟），WebUI 落在 `http://127.0.0.1:9690`。**自本版起正式区分 beta 与正式版**
+  （0.x 全为 beta，正式版自 v1.0.0 起，tag 带 `-beta` 后缀），见「版本号更新」。
 - 骨架、LLM 接入、文字对话、行为扩展（函数调用）、联网搜索、人格系统均已完成。
 - **启动编排 `serve/` 已完成（v0.4.1）**：`aris serve [--only/--skip/--dry-run]` 一条命令
   拉起 PG（缺则自建、没跑则自启、退出只停自己拉起的）、后台预热 embedding、建知识表、
@@ -149,6 +150,14 @@
   失败（`InvalidVersion`），bump 脚本因此只放行 `X.Y.Z`。
 - 校验点全部在 `scripts/release-check.sh` 里，**发版前必跑**；上面那条 trap
   （cache-keys）与「已安装元数据是否跟得上」都有对应检查项。
+- **tag 命名与 beta 标记（2026-09-24 定案）**：本项目的运行方式是 **clone 仓库**
+  而非下载 release，所以 beta 必须在 **tag** 上可见。
+  - `0.x` 阶段每个版本都是 beta → tag 带后缀：`v0.4.2-beta`（同版本只发一次，故不编号）；
+  - `v1.0.0` 起：正式版 `vX.Y.Z`；预发布 `vX.Y.Z-beta.N`，且 `__version__` 同步写
+    PEP 440 预发布形式（如 `1.3.0b1`），使 tag 与运行时版本**一一对应**——否则
+    `aris --version` 分不出自己是 beta 还是正式版；
+  - 规则实现在 `scripts/lib-version.sh`，`bump-version.sh` 与 `release-check.sh`
+    共用同一份，避免两处各写一遍。
 
 ### 歧义处理
 - 遇到不确定的需求或歧义，先停下来问用户确认，绝不擅自假设
@@ -323,7 +332,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 开发路线
 
-> **当前聚焦：`aris serve` 已完成（v0.4.1，clone 下来一条命令起服务）**；
+> **当前聚焦：`aris serve` 已完成（v0.4.2 beta，clone 下来一条命令起服务）**；
 > 下一步候选：真 API 实测（等低成本方案）/ 知识库第二阶段（PDF、混合检索）/
 > 记忆系统（`memory/` 复用 `store/`，动手前先定人格与会话的持久化载体）。
 > WebUI 管理后台见 `developDoc/WEBUI.md`，启动编排见 `developDoc/SERVE.md`。
