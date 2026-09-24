@@ -14,6 +14,10 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# 版本号 → tag 名的规则与 bump-version.sh 共用（见 lib-version.sh）
+# shellcheck source=lib-version.sh
+. "$REPO_ROOT/scripts/lib-version.sh"
+
 PYPROJECT="pyproject.toml"
 VERSION_FILE="src/aris/__init__.py"
 
@@ -98,11 +102,15 @@ else
 fi
 
 # ---- 5. tag 未被占用 ----
-if [ -n "$ver" ] && git rev-parse -q --verify "refs/tags/v$ver" >/dev/null; then
-    echo "[FAIL] tag v$ver 已存在，不能重复发布"
-    fail=1
+if [ -n "$ver" ]; then
+    if existing="$(version_existing_tag "$ver")"; then
+        echo "[FAIL] tag $existing 已存在，不能重复发布"
+        fail=1
+    else
+        echo "[ ok ] tag $(version_to_tag "$ver") 尚未占用"
+    fi
 else
-    echo "[ ok ] tag v${ver:-?} 尚未占用"
+    echo "[skip] 版本号不可用，跳过 tag 检查"
 fi
 
 # ---- 6. 汇总 ----
@@ -111,8 +119,8 @@ if [ "$fail" -eq 0 ]; then
     echo "结果：PASS（可进入版本发布流程）"
     echo "  1. 在 develop 上 bump 版本：bash scripts/bump-version.sh <版本|patch|minor|major>"
     echo "  2. 提交 chore(release) 并合并回 main（git merge --no-ff）"
-    echo "  3. git tag v$ver 并 git push origin develop main && git push origin v$ver"
-    echo "  4. 打 tag 后建议复查 git show v$ver --stat"
+    echo "  3. git tag $(version_to_tag "$ver") 并 git push origin develop main && git push origin $(version_to_tag "$ver")"
+    echo "  4. 打 tag 后建议复查 git show $(version_to_tag "$ver") --stat"
     exit 0
 fi
 

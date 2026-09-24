@@ -17,6 +17,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# 版本号 → tag 名的规则与 release-check.sh 共用（见 lib-version.sh）
+# shellcheck source=lib-version.sh
+. "$REPO_ROOT/scripts/lib-version.sh"
+
 VERSION_FILE="src/aris/__init__.py"
 
 # ---- 参数 ----
@@ -74,8 +78,8 @@ if [ -n "$(git status --porcelain)" ]; then
     git status --short >&2
     exit 1
 fi
-if git rev-parse -q --verify "refs/tags/v$new" >/dev/null; then
-    echo "错误：tag v$new 已存在，不能重复发布" >&2
+if existing="$(version_existing_tag "$new")"; then
+    echo "错误：tag $existing 已存在，不能重复发布" >&2
     exit 1
 fi
 
@@ -86,10 +90,15 @@ echo "版本号 $current -> $new（$VERSION_FILE）"
 uv lock
 uv sync
 
+tag="$(version_to_tag "$new")"
 echo
 echo "完成，当前版本：$(uv run aris --version)"
 echo "下一步："
 echo "  1. git add $VERSION_FILE uv.lock && git commit -m 'chore(release): 版本号 bump 至 v$new'"
 echo "  2. bash scripts/release-check.sh"
-echo "  3. git checkout main && git merge --no-ff develop -m 'chore(release): v$new —— <一句话总结>'"
-echo "  4. git tag v$new && git push origin develop main && git push origin v$new"
+echo "  3. git checkout main && git merge --no-ff develop -m 'chore(release): $tag —— <一句话总结>'"
+echo "  4. git tag $tag && git push origin develop main && git push origin $tag"
+case "$new" in
+0.*) echo "     （0.x 阶段 tag 带 -beta 后缀）" ;;
+*) echo "     （v1.0.0 起为正式版 tag；若要发 v$new 的预发布，用 v$new-beta.N）" ;;
+esac
