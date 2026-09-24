@@ -11,24 +11,19 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from ..config import get_settings
 from ..core import provide
 from .auth import AuthMiddleware
 
 
 def create_app() -> FastAPI:
-    """创建并配置 FastAPI 应用实例。"""
-    settings = get_settings()
+    """创建并配置 FastAPI 应用实例。
 
-    # 导入总线服务所有者模块以触发 provide 注册（不直接调用其函数）。
-    # routes 统一经 core.call 取用，这是注册触发点，非跨模块业务调用。
-    from aris.core.llm import fetch as _llm_fetch_svc  # noqa: F401  (llm.fetch.* / llm.retired.*)
-    from aris.core.llm import manage as _llm_manage_svc  # noqa: F401  (llm.providers.*)
-    from aris.behavior.skills import manager as _skills_svc  # noqa: F401  (skills.*)
-    import aris.knowledge  # noqa: F401  (knowledge.*)
-    import aris.store  # noqa: F401  (store.vector.count 等)
-    _verify_bus_services()
-
+    总线服务的注册由**组装根**负责（`aris serve` / `aris web` 都走
+    `serve.assemble()`，测试走 `tests/conftest.py`）——本函数只搭 HTTP 层，
+    不再自己 import 各模块：同一份「需要哪些服务」的清单散在多处必然漂移
+    （见 developDoc/SERVE.md 第 7 节）。依赖清单仍由本模块声明
+    （:data:`REQUIRED_SERVICES`），交给 serve 的 `services` 步骤统一校验。
+    """
     app = FastAPI(
         title="Project-Aris WebUI",
         docs_url=None,  # 管理后台不暴露 Swagger
@@ -75,8 +70,8 @@ def create_app() -> FastAPI:
     return app
 
 
-# webui 依赖的总线服务清单（create_app 时校验，缺注册即记错误方便排查）
-_REQUIRED_SERVICES = (
+# webui 依赖的总线服务清单（本模块声明；serve 的 `services` 步骤启动时校验）
+REQUIRED_SERVICES = (
     "audit.recent",
     "audit.summary",
     "llm.providers.load",
@@ -102,19 +97,6 @@ _REQUIRED_SERVICES = (
     "knowledge.status",
     "store.vector.count",
 )
-
-
-def _verify_bus_services() -> None:
-    """启动时校验 webui 所需的全部总线服务均已注册。"""
-    from aris.core import has_service
-
-    missing = [s for s in _REQUIRED_SERVICES if not has_service(s)]
-    if missing:
-        from loguru import logger
-        logger.error(
-            f"WebUI 依赖的总线服务未注册: {', '.join(missing)}——"
-            "请检查总线服务所有者模块是否正确导入"
-        )
 
 
 def port_in_use(host: str, port: int) -> bool:

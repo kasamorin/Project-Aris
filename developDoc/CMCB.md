@@ -141,9 +141,10 @@ summary = query_summary()            # 聚合统计
 | `skills.create/save/delete` | `behavior/skills/manager.py` 模块级 | 技能增改删 | `webui` 技能页 |
 
 > 注：`llm.*` 提供商管理服务由 `core/llm/manage.py`、`core/llm/fetch.py`
-> **模块级注册**（import 即注册），无核心类实例；webui 的 `create_app()` 显式
-> import 三个所有者模块（llm.fetch / llm.manage / skills.manager）触发注册，
-> 并调用 `_verify_bus_services()` 做启动自检（依赖的 16 个服务缺一则记 ERROR）。
+> **模块级注册**（import 即注册），无核心类实例；注册触发与启动自检归**组装根**
+> `serve.assemble()`（2026-09-19 上收，原先散在 `webui.create_app()` 里）。
+> 依赖清单由各模块自己声明（如 `webui.REQUIRED_SERVICES`），由 serve 的
+> `services` 步骤统一核验，缺一则记 ERROR 并让 serve 以非零码退出。
 
 > 注：`activate_skill` 是注册在 `ToolRegistry` 里的普通工具（经 `tools.execute`
 > 总线执行），**不是**独立服务。skill 系统详见 `developDoc/SKILLS.md`。
@@ -193,8 +194,9 @@ summary = query_summary()            # 聚合统计
   - `core/bus.py` 新增 `has_service`（公开），供启动自检使用。
 - **webui 全部 9 个路由文件改走 `core.call`**，不再直接 import 任何
   `core.llm` / `core.audit` / `behavior.skills` 业务函数。
-- `webui/__init__.py` 的 `create_app()` 是**触发注册点**（import 三个
-  所有者模块 + `_verify_bus_services()` 启动自检），非跨模块业务调用。
+- `webui/__init__.py` 的 `create_app()` **只搭 HTTP 层**：注册触发与自检已上收到
+  组装根 `serve.assemble()`（2026-09-19，见 `developDoc/SERVE.md` 第 7 节），
+  避免同一份「需要哪些服务」的清单散在多处漂移。
 - **基础设施例外（可直连，不算模块间通讯）**：
   - `aris.config.get_settings()`（`.env` / `data_dir` 等启动级配置）。
   - `aris.cfgtoml`（模块级 toml 读取/写回，配置页用）。

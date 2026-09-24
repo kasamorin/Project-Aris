@@ -134,6 +134,7 @@ def test_builtin_steps_shape() -> None:
     steps = build_steps(ServeConfig())
     names = [s.name for s in steps]
     assert names == [
+        "services",
         "core",
         "persona",
         "behavior",
@@ -143,8 +144,8 @@ def test_builtin_steps_shape() -> None:
         "webui",
     ]
     levels = {s.name: s.level for s in steps}
-    assert levels["store.db"] == "required"
-    assert all(level == "optional" for name, level in levels.items() if name != "store.db")
+    # required 只有「服务表自检」与「数据库」两项
+    assert {n for n, level in levels.items() if level == "required"} == {"services", "store.db"}
     assert [s.name for s in steps if s.blocks] == ["webui"]
     assert {s.name: s.needs for s in steps}["knowledge"] == ("store.db",)
 

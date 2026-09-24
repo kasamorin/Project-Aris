@@ -154,6 +154,23 @@ def _log_outcome(outcome: StepOutcome) -> None:
         logger.warning(outcome.line)
 
 
+def probe_all(
+    only: list[str] | None = None, skip: list[str] | None = None
+) -> list[StepOutcome]:
+    """只跑探针并返回清单（供 `aris doctor` 复用；不启动任何东西）。
+
+    与 `aris serve --dry-run` 走同一条路径，保证「体检结论」与「启动结论」一致。
+    """
+    config = get_serve_config()
+    assemble()
+    skipped = list(config.skip) + list(skip or [])
+    if not config.web_enabled and not (only and "webui" in only):
+        skipped.append("webui")
+    plan = select_steps(build_steps(config), only, skipped)
+    outcomes, _ = run_plan(plan, dry_run=True)
+    return outcomes
+
+
 def serve(
     *,
     only: list[str] | None = None,
@@ -218,4 +235,4 @@ def serve(
     return exit_code
 
 
-__all__ = ["StepOutcome", "assemble", "run_plan", "select_steps", "serve"]
+__all__ = ["StepOutcome", "assemble", "probe_all", "run_plan", "select_steps", "serve"]

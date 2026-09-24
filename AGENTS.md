@@ -262,10 +262,12 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   [--only] [--skip] [--dry-run] 把各模块按序拉起（PG 自启 + 迁移、embedding 后台预热、
   knowledge 建表、WebUI 并入、端口冲突则拒启 web），前台打印启动清单与日志、Ctrl-C 收尾；
   无阻塞步骤时不执行收尾（数据库保持运行）。**单向**：只调别人的启动动作，
-  **不对外提供查询服务**；**非守护**、不含 TUI。失败分级（required 仅 `store.db` /
-  其余 optional）+ **降级必须记日志**。待做：上收 `webui` 的 import 与
-  `_REQUIRED_SERVICES`、与 `aris doctor` 合流探针；工具注册表 / loop / LLM engine 仍是
-  会话级对象（#4/#7 时再上收）。详见 `developDoc/SERVE.md`
+  **不对外提供查询服务**；**非守护**、不含 TUI。失败分级（required = `services`
+  自检与 `store.db`，其余 optional）+ **降级必须记日志**。组装根与依赖清单已上收：
+  `serve.assemble()` 是唯一触发点、`services` 步骤核验各模块声明的
+  `REQUIRED_SERVICES`、`aris doctor` 与 `aris serve --dry-run` 共用
+  `serve.probe_all()` 探针。**待做**：工具注册表 / agent loop / LLM engine 仍是
+  会话级对象（#4/#7 时由 serve 上收）。详见 `developDoc/SERVE.md`
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
   届时再评估是否独立成模块
 
@@ -279,9 +281,10 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 开发路线
 
-> **当前聚焦：知识库首期已完成（v0.4.0，2026-09-18）**；下一步候选：真 API 实测 /
-> 知识库第二阶段（PDF、混合检索）/ 记忆系统（`memory/` 复用 `store/`）。
-> WebUI 管理后台见 `developDoc/WEBUI.md`。
+> **当前聚焦：知识库首期（v0.4.0）与 `aris serve` 启动编排首期均已完成（2026-09-19）**；
+> 下一步候选：真 API 实测（等低成本方案）/ 知识库第二阶段（PDF、混合检索）/
+> 记忆系统（`memory/` 复用 `store/`，动手前先定人格与会话的持久化载体）。
+> WebUI 管理后台见 `developDoc/WEBUI.md`，启动编排见 `developDoc/SERVE.md`。
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）

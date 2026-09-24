@@ -37,12 +37,16 @@ serve 侧只持一张**有序清单**逐个 `core.call`。
 
 | # | 步骤 | 动作 | 失败档位 |
 |---|---|---|---|
-| 1 | `core.llm` | import 触发注册；校验 `providers.toml`（缺 key / 无可用模型只警告） | optional |
+| 0 | `services` | 核验各模块声明的依赖服务都已注册（缺一即 ERROR 且非零退出） | **required** |
+| 1 | `core.llm` | import 触发注册；校验 `providers.toml` + 体检（缺 key / 无可用模型等） | optional |
 | 2 | `persona` / `behavior` | import 触发注册（工具、skills 菜单） | optional |
 | 3 | `store.db` | 探活；没跑则**自启**便携 PG；跑迁移到最新 | **required** |
 | 4 | `store.embed` | **后台预热** embedding（就绪标志；见 §4） | optional |
 | 5 | `knowledge` | 建表 / 建索引 / 统计文档与块数 | optional（依赖 3） |
 | 6 | `webui` | 端口探测 → 起 HTTP（见 §4） | optional |
+
+说明：探针是「只读 + 可失败」的体检（`aris doctor` 复用同一份），启动动作才是真正
+拉东西；`--dry-run` 只跑前者。
 
 终端输出形态（清单结构化，便于日志检索）：
 
@@ -92,7 +96,7 @@ aris serve v0.4.0  data=…/data  pid=12345
 
 ## 5. 失败分级与日志（定案）
 
-- **两档**：`required`（只有 `store.db`）与 `optional`（其余）。
+- **两档**：`required`（`services` 服务表自检、`store.db`）与 `optional`（其余）。
 - required 失败：依赖它的步骤跳过（knowledge → skipped），其余继续，**serve 不退出**；
   error 日志 + 清单标 `✗/–` + 结尾汇总「N 个模块降级，M 个跳过」。
 - optional 失败：只影响自己，记 warning 后继续。
@@ -128,15 +132,18 @@ serve 只管「启不启」。
 
 ## 7. 与既有入口 / 模块的关系（定案）
 
-- **唯一组装根**：现在 `cli.py`（import `knowledge` / `store`）与
-  `webui/__init__.py`（import `llm.fetch` / `llm.manage` / `skills` + 24 项
-  `_REQUIRED_SERVICES` 自检）各维护一套，已存在漂移风险。**上收到 serve**：
-  import 触发、服务自检、启动顺序都只在这里写一次。
-- `aris web` → 复用 serve 的组装与步骤，只跑 `webui` 那一步。
+- **唯一组装根（已落地）**：`serve.assemble()` 是唯一一份「import 哪些所有者模块」
+  的清单；服务自检由 `services` 步骤统一做。`aris serve` / `aris web` 都走它，
+  测试在 `tests/conftest.py` 里调它，`webui.create_app()` 只搭 HTTP 层、不再自己
+  import 各模块（原先 `cli.py` 与 `webui/__init__.py` 各维护一套，必然漂移）。
+  依赖清单仍由各模块自己声明（如 `webui.REQUIRED_SERVICES`），避免「谁需要什么」
+  的知识搬到 serve 里重新写一遍。
+- `aris web` → 先 `serve.assemble()`，再跑 `webui` 那一步（端口探测也在其中）。
 - `aris chat` → **纯前端，与 serve 互不干涉（2026-09-19 定案）**：既不自启也不被自启
   ——不触发 PG 自启、不触发 embedding 预热，只 import 自己需要的模块（保持现状的
   轻量组装）。理由：TUI 是随手敲的调试入口，不该为它等 20s 或改动系统状态。
-- `aris doctor` → 与 serve 的模块探针**共用同一份实现**，不维护两套自检。
+- `aris doctor` → 环境自检（Python / C 扩展 / .env / 数据目录）+ `serve.probe_all()`，
+  与 `aris serve --dry-run` 走同一条探针路径，保证体检结论与启动结论一致。
 - **WebUI 仪表盘「系统状态区域」**（v0.3.0 遗留待办）→ WebUI 直接调各模块自己的
   服务取状态，**不经过 serve**（对应 §1 的单向边界）。
 
@@ -159,8 +166,8 @@ serve 只管「启不启」。
 | 1 | `serve/conf.py` + `config/serve.toml` + `aris serve`（清单与日志） | ✅ 2026-09-19 |
 | 2 | 各模块补启动 hook（`store.start/stop`、`store.embed_preload`、`knowledge.start`、`webui.start/probe`） | ✅ 2026-09-19 |
 | 3 | 端口探测 + 失败分级日志 + `--only/--skip/--dry-run` | ✅ 2026-09-19 |
-| 4 | 上收组装根与 `_REQUIRED_SERVICES`（`aris web` 已改走 `webui.start`；`webui/__init__.py` 里那份 import 与依赖清单尚未上收） | ⬜ 待做 |
-| 5 | 与 `aris doctor` 合流探针实现 | ⬜ 待做 |
+| 4 | 上收组装根与依赖清单（`create_app()` 只搭 HTTP 层；`serve.assemble()` 唯一触发点；`services` 步骤统一核验 `REQUIRED_SERVICES`） | ✅ 2026-09-19 |
+| 5 | 与 `aris doctor` 合流探针（`serve.probe_all()`；LLM 体检收敛为 `llm.providers.check` 总线服务） | ✅ 2026-09-19 |
 
 首期落地（2026-09-19）：
 
@@ -181,5 +188,4 @@ serve 只管「启不启」。
 - **工具注册表 / agent loop / LLM engine / `skills.menu` 仍是会话级对象**（`ChatSession`
   里自建），serve 目前只做 import 级组装；将来做 BACKLOG #4/#7 时由 serve 持有单例
   （`behavior.start` 之类），届时该步骤才会有真实动作
-- `webui/__init__.py` 的 `_REQUIRED_SERVICES` 与 import 清单尚未上收（第 4 步）
 - 退出细节仍 `[待讨论]`：二次 Ctrl-C 强杀、退出码明细
