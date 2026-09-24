@@ -20,6 +20,7 @@ from .bus import (
     provide,
     query_recent,
     query_summary,
+    services,
     subscribe,
 )
 
@@ -31,5 +32,6 @@ __all__ = [
     "provide",
     "query_recent",
     "query_summary",
+    "services",
     "subscribe",
 ]

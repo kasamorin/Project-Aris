@@ -1,0 +1,18 @@
+# serve 模块可调参数（启动编排，见 developDoc/SERVE.md 第 6 节）
+# 优先级：代码内默认值 < 本文件；CLI 的 --only / --skip 覆盖本文件的 skip
+
+# 数据库没在跑时是否自启便携实例（false = 只探活，未运行即报错）
+start_db = true
+
+# serve 退出时是否停掉「本次自启的」数据库（原本就在跑的不动）
+stop_db_on_exit = true
+
+# 启动时后台预热本地 embedding（懒加载会让首个工具调用顶穿 timeout）
+preload_embedding = true
+
+# 是否把 WebUI 一并拉起（host / port 仍归 config/webui.toml）
+web_enabled = true
+
+# 默认跳过的步骤（可选值：core / persona / behavior / store.db / store.embed /
+# knowledge / webui）；CLI --skip 在本列表基础上追加
+skip = []
