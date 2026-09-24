@@ -46,8 +46,14 @@
 
 ## 现状
 
-- 当前版本 **v0.4.0**（2026-09-18）。
+- 当前版本 **v0.4.1**（2026-09-19）。**这是首个「clone 下来一条命令起服务」的版本**：
+  `uv sync` → `cp .env.example .env` → `aris serve` 即可（首次自动获取便携 PG，需联网
+  数分钟），WebUI 落在 `http://127.0.0.1:9690`。
 - 骨架、LLM 接入、文字对话、行为扩展（函数调用）、联网搜索、人格系统均已完成。
+- **启动编排 `serve/` 已完成（v0.4.1）**：`aris serve [--only/--skip/--dry-run]` 一条命令
+  拉起 PG（缺则自建、没跑则自启、退出只停自己拉起的）、后台预热 embedding、建知识表、
+  并入 WebUI（端口冲突则拒启 web 并提示）；`aris doctor` 与它共用同一份探针。
+  详见 `developDoc/SERVE.md`。
 - WebUI 管理后台已完成（2026-08-23）：登录鉴权、仪表盘、审计、提供商管理、
   技能管理、配置管理、日志查看；**知识库管理页 `/knowledge` 已补（2026-09-18）**。
 - **WebUI 安全审查与总线化改造已完成（2026-08-30）**：路径穿越/TOML 注入/XSS/
@@ -211,8 +217,8 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 
 ## 模块划分（对应 Project-Aris.md 蓝图）
 
-- `core/` —— 基础设施：统一通讯层（`bus.py` 服务注册表 + 事件总线 + 审计）+
-  LLM 提供方抽象（多提供方 fallback、流式、工具调用）
+- `core/` —— 基础设施：跨模块通讯总线 CMCB（`bus.py` 服务注册表 + 事件总线 +
+  审计）+ LLM 提供方抽象（多提供方 fallback、流式、工具调用）
 - `store/` —— **存储与向量基础设施（2026-09-18 定案）**：embedding 抽象
   （文本 → 向量，Protocol + 多实现）+ PostgreSQL/pgvector 基础设施（DSN、连接池、迁移、
   向量检索 helper）。**不认识 `memory/` / `knowledge/`**，不做业务语义；模型本体放
@@ -258,22 +264,33 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   `commands.py`（指令）；CLI 走 `aris chat`，连接仍走 `core/`。非终端自动回退 input 循环。
   **TUI 定位为开发调试手段**，项目成型后的主要对话界面是 WebUI（见 developDoc/WEBUI.md），
   TUI 保留作为无 GUI 环境下的调试与快速验证入口
+- `serve/` —— **启动编排（2026-09-19 定案，首期已实现）**：`aris serve`
+  [--only] [--skip] [--dry-run] 把各模块按序拉起（PG 自启 + 迁移、embedding 后台预热、
+  knowledge 建表、WebUI 并入、端口冲突则拒启 web），前台打印启动清单与日志、Ctrl-C 收尾；
+  无阻塞步骤时不执行收尾（数据库保持运行）。**单向**：只调别人的启动动作，
+  **不对外提供查询服务**；**非守护**、不含 TUI。失败分级（required = `services`
+  自检与 `store.db`，其余 optional）+ **降级必须记日志**。组装根与依赖清单已上收：
+  `serve.assemble()` 是唯一触发点、`services` 步骤核验各模块声明的
+  `REQUIRED_SERVICES`、`aris doctor` 与 `aris serve --dry-run` 共用
+  `serve.probe_all()` 探针。**待做**：工具注册表 / agent loop / LLM engine 仍是
+  会话级对象（#4/#7 时由 serve 上收）。详见 `developDoc/SERVE.md`
 - 插件系统：**后续可能增加**——MCP 服务器可做同样的事，
   届时再评估是否独立成模块
 
-### 模块间调用规则（统一通讯层，2026-08-12 定案）
+### 模块间调用规则（跨模块通讯总线 CMCB，2026-08-12 定案）
 
 - 模块间通讯**一律走 `core.call` / `core.provide`**，不直接跨模块 import 调用
 - 核心类实例自注册（`__init__` 里 `provide` 自己的方法），命名 `module.service`
 - 明确不走总线的边界：对象构造/装配（依赖注入）、同模块内部调用、纯类型引用
   （如 Message）；CLI 组装根可保持直接引用
-- 服务表与架构详见 `developDoc/BUS-ARCHITECTURE.md`
+- 服务表与架构详见 `developDoc/CMCB.md`
 
 ## 开发路线
 
-> **当前聚焦：知识库首期已完成（v0.4.0，2026-09-18）**；下一步候选：真 API 实测 /
-> 知识库第二阶段（PDF、混合检索）/ 记忆系统（`memory/` 复用 `store/`）。
-> WebUI 管理后台见 `developDoc/WEBUI.md`。
+> **当前聚焦：`aris serve` 已完成（v0.4.1，clone 下来一条命令起服务）**；
+> 下一步候选：真 API 实测（等低成本方案）/ 知识库第二阶段（PDF、混合检索）/
+> 记忆系统（`memory/` 复用 `store/`，动手前先定人格与会话的持久化载体）。
+> WebUI 管理后台见 `developDoc/WEBUI.md`，启动编排见 `developDoc/SERVE.md`。
 
 1. **搭标准项目骨架**（轻量）：目录结构 + 配置系统 + 日志 + CLI 入口，各模块留占位
    - 骨架已完成（2026-08），配置系统已定案并跑通 `uv sync`（2026-08-09）
@@ -373,6 +390,11 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   勾选 UI→写回备份）；「本地有云无」模型进退休机制
   `config/retired_models.toml`（机器维护，宽限期 30 天自动删，`aris llm retired`
   手动删，回归自动恢复）。详 `developDoc/LLM-PROVIDER-MGMT.md`
+- **总线命名（2026-09-19 收口）**：定名**「跨模块通讯总线」**（Cross-Module
+  Communication Bus, **CMCB**）——`core/bus.py` 同时承载服务注册表 + 事件广播 +
+  审计查询，按职责命名。文档与代码注释统一用 CMCB 称谓（架构文档
+  `developDoc/CMCB.md`）；**代码标识符（模块文件 `core/bus.py`、函数名、服务名）
+  保持不变**——服务名前缀是模块名、函数名不含 `aris`，当初即为降低改名成本而设计
 
 ## 待定（勿替用户做决定）
 
@@ -386,11 +408,64 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   —— 交给 Aris（相当于「打断 + 继续听」）或丢弃并假装没听见（「装没听见」）。
   判断依据待定（如语气、上下文、用户意图）。实现前先定方案
 - Python 静态检查/格式化工具（ruff vs black+isort+flake8）
-- **总线改名（待做，2026-09-18 定名）**：按职责命名——现行 `core/bus.py` 同时承载
-  **服务注册表（`provide`/`call`）+ 事件广播（`subscribe`/`emit`）+ 审计查询**，故定名
-  **「跨模块通讯总线」（Cross-Module Communication Bus, CMCB）**。**暂不改**：涉及既有
-  16 个服务命名与多处文档，改动面太大，留作待办，择期统一替换
+- **人格与对话历史的持久化载体（未定，2026-09-19 决定先置着）**：人格用
+  `data/personas/<id>/` 文件还是 PG 表；会话历史是否落 PG（现为纯内存，重启即丢）。
+  做 BACKLOG #4 多人格 / #5 记忆系统**之前必须先定**，否则相关表结构要返工
+- ~~总线改名 CMCB~~（已完成：2026-09-19 文档与注释统一改名，见「已定案」）
 - ~~测试框架是否启用 pytest~~（已定：2026-08-18 启用 pytest，见技术栈）
+
+## 已知陷阱（踩坑档案，勿重犯）
+
+> 只收**会重复咬人**的坑，一行一条；来龙去脉见 `developDoc/PROGRESS-ARCHIVE.md`
+> 对应条目与各专门文档。**新踩到的坑，修完顺手补到这里**（重要的一行进本文，
+> 长篇叙述进 PROGRESS 当轮条目，过时再随归档下沉）。
+
+### 数据库 / 迁移（`store/`）
+- **迁移「报成功但表不存在」**：psycopg 在已有隐式事务时 `conn.transaction()` 退化为
+  SAVEPOINT；建跟踪表后必须先 `commit()`，再逐条跑迁移
+- **`pg_isready` 退出码别只认 0**：`1` 也可能是「在跑但拒绝本次探测」（默认库不存在 /
+  正在启动），只有 `2` 才算停
+- **残留 `postmaster.pid` 会挡住启动**（PID 被复用，`pg_ctl` 直接拒绝）：先探活，
+  确认无响应再清 pidfile
+- **`pg_ctl -o "-k <相对路径>"` 必失败**：postgres 启动后 chdir 到 PGDATA，
+  `PgEnv` 内路径一律转绝对
+- **`pkill -f 'data/pgdata'` 会杀掉自己的 shell**（模式自匹配），换精确匹配
+- 便携实例是**项目本地**的：不注册系统服务、不随开机自启，用 WebUI 前先 `aris db start`
+
+### 依赖 / 环境
+- **torch 与 torchvision 必须同锁 `pytorch-cpu` 源**：否则 torchvision 装成 CUDA wheel，
+  报 `operator torchvision::nms does not exist`，`transformers` 直接导入失败
+- **缓存与 HOME 必须收进 `data/`**：micromamba 用 `MAMBA_ROOT_PREFIX` /
+  `CONDA_PKGS_DIRS` / `XDG_CACHE_HOME` / `HOME`，HF 模型用 `HF_HOME`
+- **OpenVINO 遥测 warning 无害**：它往 `$HOME/intel` 写 consent 文件，
+  `OV_TELEMETRY_OPT_OUT` 压不住（opt_in_checker 用 `Path.home()`），可忽略
+- 只读 `~/.cache` 的环境下给 uv 加 `UV_CACHE_DIR=$PWD/data/.uv-cache`
+
+### 命名 / 导入
+- **函数与模块同名会被包重导出遮蔽**：`bootstrap()` 与 `bootstrap.py` 撞名后
+  `store.bootstrap` 拿到的是函数（已连踩两次）→ 改名 `bootstrap_env`；
+  测试里要模块对象用 `importlib.import_module("aris.store.bootstrap")`
+
+### WebUI / 前端
+- **HTML 转 markdown 别用 trafilatura**：它的 markdown 输出会抹平标题层级，
+  用 BeautifulSoup 自写转换
+- **Jinja 里 `job.items` 会解析成 dict 的 `.items` 方法**（`TypeError`）→ 用 `job["items"]`
+- **「只刷新一次」的守门不能用 `sessionStorage`**：每次加载先清 → 判定完成 → 再 reload，
+  死循环。终止条件放服务端（模板 `data-poll`）+ 终态 `location.replace()`
+- **鉴权不能用前缀宽匹配**（`/loginfoo` 可绕过 `/login`）→ 精确集合 + 前缀分离
+- **marked.js 输出必须过 DOMPurify**；SSE 事件流一律 `tojson` + 文本节点，不碰 `innerHTML`
+- **CPU 密集的接口（本地 embedding 约 20s 加载）别写成 `async def`**：单 worker 下会
+  卡住整站，用同步 `def`（走线程池）或后台任务
+
+### 测试
+- **别往全局迁移登记表塞测试用重名版本**：同进程后续所有迁移都会误判漂移；
+  隔离用例显式传 `migrations=`；写真实库的测试要在 `finally` 里清理
+
+### 外部服务
+- **DeepSeek 带 tools 必须回传 `reasoning_content`**，否则 400
+- **Bing 直连三件套缺一不可**：Firefox UA + 先访问首页取 cookie（MUID）+
+  搜索 URL 带 `form=QBRE`；真实链接要解 `/ck/a` 的 `u=` base64
+  （详见 `developDoc/WEB-SEARCH.md`；Playwright 方案已删除，勿再实现）
 
 ## 文档索引（按需阅读）
 
@@ -398,7 +473,7 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 |---|---|
 | LLM 接入 / `core` 模块 | `developDoc/API-CALL.md` |
 | 配置文件体系（三源分工 / 收口原则） | `developDoc/CONFIG.md` |
-| 统一通讯层（`core.bus` 服务/事件/审计） | `developDoc/BUS-ARCHITECTURE.md` |
+| 跨模块通讯总线 CMCB（`core.bus` 服务/事件/审计） | `developDoc/CMCB.md` |
 | 技能系统（`behavior.skills`） | `developDoc/SKILLS.md` |
 | 联网搜索方案（演进历史 / 留档） | `developDoc/WEB-SEARCH.md` |
 | `memory` 模块（Embedding / 检索） | `developDoc/EMBEDDING.md` |
@@ -409,6 +484,9 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 | WebUI 管理后台（审计/技能/提供商/插件） | `developDoc/WEBUI.md` |
 | WebUI 安全审查与总线化改造（修复清单/计划/进度） | `developDoc/SECURITY-AND-REFACTOR-PLAN.md` |
 | 项目蓝图 | `developDoc/Project-Aris.md` |
+| 启动编排（`aris serve`：启动顺序 / 自启策略 / 失败分级） | `developDoc/SERVE.md` |
 | 记忆架构总体（候选参考） | `referenceDocumentation/记忆数据库-bydsv4fpre.html`、`MemoryTips-bygemini.md` |
 | 开发路线总体（候选参考） | `referenceDocumentation/总览-bydsv4fpre.html` |
 | 开发进度（每次开发前先读） | `PROGRESS.md` |
+| 后续待办（未排期的中长期方向） | `developDoc/BACKLOG.md` |
+| 开发进度归档（历史条目与踩坑记录，查旧事用） | `developDoc/PROGRESS-ARCHIVE.md` |

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from urllib.parse import urlparse
 
@@ -104,9 +105,36 @@ def model_delete(pid: str, model_id: str) -> None:
     _save(cfg)
 
 
+def providers_check() -> list[tuple[str, str]]:
+    """配置体检：返回 ``[(level, message)]``，level ∈ error / warning。
+
+    `aris llm check`、`aris doctor` 与 `aris serve` 的 core.llm 探针共用这一份判断，
+    避免同一件事在两处得出不同结论（原实现散在 CLI 里）。
+    """
+    cfg = _load()
+    issues: list[tuple[str, str]] = []
+    known = {p.id for p in cfg.providers}
+    for pid in cfg.order:
+        if pid not in known:
+            issues.append(("error", f"default_provider_order 引用不存在的提供方: {pid}"))
+    for p in cfg.providers:
+        if not p.models:
+            issues.append(("error", f"提供方 {p.id} 模型列表为空"))
+        if not os.environ.get(p.api_key_env):
+            issues.append(("error", f"提供方 {p.id} 缺 API key：请在 .env 设置 {p.api_key_env}"))
+    if not cfg.default_model:
+        issues.append(("warning", "default_model 未配置，CLI 将自动兜底取第一个可用模型"))
+    elif cfg.default_model not in cfg.all_model_ids():
+        issues.append(
+            ("warning", f"default_model {cfg.default_model} 不存在于任何提供方，将自动兜底")
+        )
+    return issues
+
+
 # ---- 总线服务注册 ----
 provide("llm.providers.load", providers_load)
 provide("llm.providers.add", provider_add)
 provide("llm.providers.delete", provider_delete)
 provide("llm.providers.model_add", model_add)
 provide("llm.providers.model_delete", model_delete)
+provide("llm.providers.check", providers_check)

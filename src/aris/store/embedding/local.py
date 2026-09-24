@@ -92,6 +92,14 @@ class LocalBekkoProvider:
                 raise EmbeddingError(f"加载模型 {self._model_id} 失败：{exc}") from exc
             logger.success(f"本地 embedding 就绪（{self.dimension} 维）")
 
+    def warmup(self) -> None:
+        """预热：提前把模型加载进内存（`aris serve` 启动时后台调用）。
+
+        懒加载会让**首个**检索或工具调用等上约 20s，容易顶穿调用方 timeout，
+        故由 serve 在启动阶段后台预热；此方法本身是阻塞的，调用方自行放线程。
+        """
+        self._load()
+
     def _target(self) -> str:
         """模型来源：``data/models/<name>`` 下的本地目录优先，否则用 HF 仓库 id。"""
         local_dir = self._hf_home / self._model_id

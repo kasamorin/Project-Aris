@@ -29,6 +29,11 @@ notify.broadcast = lambda *a, **k: None  # noqa: E731
 
 from aris.behavior.registry import ToolRegistry  # noqa: E402
 from aris.behavior.tools.http_request import register as reg_http  # noqa: E402
+from aris.serve import assemble as _assemble  # noqa: E402
+
+# 全量组装总线服务：与 `aris serve` / `aris web` 共用同一份（serve.assemble()）。
+# 测试也是宿主——create_app() 不再自己 import 各模块，建应用前得先注册好服务。
+_assemble()
 
 from support.mock_http import MockHTTP  # noqa: E402
 from support.mock_llm_server import MockLLMServer  # noqa: E402

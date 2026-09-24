@@ -172,8 +172,9 @@ skill 是**外部扩展接口**，内部模块绕经 skill 只增一层壳与延
 - `store.health` / `store.migrate` —— 连接健康与 schema 迁移
 - `knowledge.search` / `knowledge.ingest` / `knowledge.sources`
 
-> **总线改名待办（2026-09-18 用户提出）**：用户计划给总线重新取名，届时统一
-> 调整命名（含既有 16 个服务）。本轮不动。
+> **总线改名（已收口，2026-09-19）**：定名「跨模块通讯总线」（CMCB），
+> 文档与注释已统一改名（架构文档 `developDoc/CMCB.md`）；服务名等代码
+> 标识符保持不变，详见 AGENTS.md「已定案」。
 
 ### 4.2 D. 检索侧
 

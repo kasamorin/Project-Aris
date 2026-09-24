@@ -12,6 +12,8 @@
 - ``store.migrate.run`` / ``store.migrate.pending`` —— 迁移执行与待办查询
 - ``store.vector.search`` / ``upsert`` / ``ensure_index`` / ``dimension`` ——
   pgvector 通用动作（业务语义留在 `knowledge/` / `memory/`）
+- ``store.start`` / ``store.stop`` —— 启动编排用（确保可用并迁移；只停自己拉起的实例）
+- ``store.embed_preload`` / ``store.embed_status`` —— 后台预热与就绪状态
 
 实现进度：环境探测、便携实例获取、连接与探活、embedding 抽象与本地 provider、
 迁移机制与向量检索 helper 均已就位；落地首个业务表时即可验证端到端。
@@ -20,12 +22,16 @@
 from __future__ import annotations
 
 from contextlib import closing
+from threading import Thread
 from typing import Any
+
+from loguru import logger
 
 from ..core import provide
 from .bootstrap import (
     BootstrapError,
     bootstrap_env,
+    ensure_database,
     is_running,
     start,
     stop,
@@ -131,6 +137,112 @@ def _vector_count(table: str, **options: Any) -> int:
         return count(conn, table, **options)
 
 
+# 启动编排（serve）用状态：实例是否由本次 serve 自启（退出时只停自己拉起的），
+# embedding 预热进度（idle / warming / ready / failed / skipped）
+_db_started_by_serve = False
+_embed_state: dict[str, Any] = {"status": "idle", "detail": "未预热"}
+
+
+def _db_status() -> dict[str, Any]:
+    """总线服务：数据库实例状态（只读，不启动任何东西）。
+
+    供 `aris serve` 的探针与将来的状态面板区分三种情形：未初始化 / 未运行 / 在跑。
+    """
+    env = detect()
+    installed = bool(env.installed and (env.pgdata / "PG_VERSION").exists())
+    running = is_running(env) if installed else False
+    pending: list[str] = []
+    if running:
+        pending = _migrate_pending()
+    return {
+        "installed": installed,
+        "running": running,
+        "port": env.port,
+        "started_by_serve": _db_started_by_serve,
+        "pending_migrations": pending,
+    }
+
+
+def _start(*, autostart: bool = True, init_if_missing: bool = True) -> dict[str, Any]:
+    """总线服务：确保数据库可用（缺则自建、没跑则自启）并应用迁移（serve 启动步骤）。
+
+    ``init_if_missing`` 是「clone 下来一条命令起服务」的关键：便携实例不存在时
+    自动获取（micromamba + conda-forge，需联网，首次约数分钟）。
+    """
+    global _db_started_by_serve
+    env = detect()
+    installed = bool(env.installed and (env.pgdata / "PG_VERSION").exists())
+    if not installed:
+        if not init_if_missing:
+            raise BootstrapError("便携数据库尚未初始化：先执行 `aris db init`")
+        logger.info("首次运行：正在获取便携 PostgreSQL + pgvector（需联网，首次约数分钟）...")
+        env = bootstrap_env(env)  # initdb + 启动 + 建库 + 建扩展 + 写版本
+        _db_started_by_serve = True  # bootstrap_env 已经把它拉起来了
+    running = is_running(env)
+    if not running:
+        if not autostart:
+            raise BootstrapError("数据库未运行，且已禁用自启：先执行 `aris db start`")
+        logger.info("数据库未运行，正在自启便携实例 ...")
+        start(env)
+        _db_started_by_serve = True
+    ensure_database(env)  # 幂等：建库 + 建 vector 扩展
+    applied = _migrate_run()
+    return {
+        "created": not installed,
+        "running_before": running,
+        "started_by_serve": _db_started_by_serve,
+        "port": env.port,
+        "migrations": applied,
+    }
+
+
+def _stop(*, only_self_started: bool = True) -> bool:
+    """总线服务：停止数据库；默认只停「本次 serve 自启的」，原本在跑的不动。"""
+    global _db_started_by_serve
+    if only_self_started and not _db_started_by_serve:
+        return False
+    stopped = stop(detect())
+    _db_started_by_serve = False
+    return stopped
+
+
+def _embed_preload() -> dict[str, Any]:
+    """总线服务：后台预热 embedding（立即返回，不阻塞启动流程）。
+
+    懒加载会让首个检索/工具调用等约 20s，容易顶穿调用方 timeout；本地模型
+    反正迟早要常驻，故由 serve 在启动阶段就放到后台线程去加载。预热失败不致命
+    （真正调用时会重试加载并抛出可读错误）。
+    """
+    if _embed_state["status"] in ("warming", "ready"):
+        return dict(_embed_state)
+    provider = get_provider()
+    warmup = getattr(provider, "warmup", None)
+    if warmup is None:  # 未来云端 provider 无需预热
+        _embed_state.update(status="skipped", detail=f"{provider.name} 无需预热")
+        return dict(_embed_state)
+    _embed_state.update(status="warming", detail=f"{provider.name} 预热中")
+
+    def _work() -> None:
+        try:
+            warmup()
+        except Exception as exc:  # 预热失败只记日志，不阻断 serve
+            logger.warning(f"embedding 预热失败：{exc}")
+            _embed_state.update(status="failed", detail=str(exc))
+        else:
+            logger.success(f"embedding 预热就绪：{provider.name}（{provider.dimension} 维）")
+            _embed_state.update(
+                status="ready", detail=f"{provider.name}（{provider.dimension} 维）"
+            )
+
+    Thread(target=_work, name="aris-embed-preload", daemon=True).start()
+    return dict(_embed_state)
+
+
+def _embed_status() -> dict[str, Any]:
+    """总线服务：embedding 预热状态（不触发加载）。"""
+    return dict(_embed_state)
+
+
 provide("store.health", _health)
 provide("store.embed", _embed)
 provide("store.embed_dimension", _embed_dimension)
@@ -142,6 +254,11 @@ provide("store.vector.upsert", _vector_upsert)
 provide("store.vector.ensure_index", _vector_ensure_index)
 provide("store.vector.dimension", _vector_dimension)
 provide("store.vector.count", _vector_count)
+provide("store.start", _start)
+provide("store.db_status", _db_status)
+provide("store.stop", _stop)
+provide("store.embed_preload", _embed_preload)
+provide("store.embed_status", _embed_status)
 
 __all__ = [
     "BootstrapError",

@@ -1,7 +1,15 @@
-# 统一通讯层（core.bus）架构文档
+# 跨模块通讯总线（CMCB）架构文档
 
-> 2026-08-12 定案并落地。本文档是统一通讯层的**唯一权威说明**，
+> 2026-08-12 定案并落地。本文档是跨模块通讯总线（CMCB）的**唯一权威说明**，
 > 后续改动 bus 相关代码或新增服务时，须同步更新本文件。
+>
+> **命名沿革**：本层原名「统一通讯层」，2026-09-18 按职责定名
+> **「跨模块通讯总线」（Cross-Module Communication Bus, CMCB）**，
+> 2026-09-19 文档统一改名（本文档由 `BUS-ARCHITECTURE.md` 更名而来，
+> 历史提交与 PROGRESS 旧条目仍用旧名/旧文件名，属预期）。
+> 代码侧**只改称谓、不改标识符**：模块文件 `core/bus.py`、函数名、
+> 服务名全部保持不变——服务名前缀是模块名、函数名不含 `aris`，
+> 当初即为降低改名成本而设计。
 
 ## 背景与动机
 
@@ -14,14 +22,14 @@
    后期做 WebUI 监控无从下手。
 3. **不可替换**：想 mock / 换实现（如测试时替换 LLM）需要改调用方。
 
-**最终决策**：在 `core/` 建立统一通讯枢纽 `bus`，所有模块间通讯
+**最终决策**：在 `core/` 建立跨模块通讯总线 `bus`（CMCB），所有模块间通讯
 （同步服务调用 + 事件广播）统一经过它。
 
 ## 关键决策记录（防止后人走回头路）
 
 ### 1. 为什么不用 C 做通讯层（已否决，勿再提）
 
-曾设想用 C 语言加子模块做统一通讯层，所有通讯经 ctypes 中转。
+曾设想用 C 语言加子模块做跨模块通讯总线（CMCB），所有通讯经 ctypes 中转。
 **否决理由**（商讨结论）：
 
 - ctypes 传复杂对象（dict / Message / ToolCall）需要序列化，每次通讯
@@ -33,6 +41,8 @@
   与「可维护性最高优先级」目标冲突。
 - 后续商讨进一步澄清：即便 C 只「流经不接手」（只统计不转发），
   统计只需元数据、不涉及消息内容，Python 层完全足够。
+- 除非未来明确需要 C 语言实现或实测Python通信层延迟较大，
+  否则不使用 C 语言通讯层
 
 **C 子模块定位不变**：只做性能敏感点（Embedding 推理、GraphRAG 算子、
 音频 DSP 等），维持 `csrc` 现有「可选编译、失败降级」模式。
@@ -131,9 +141,10 @@ summary = query_summary()            # 聚合统计
 | `skills.create/save/delete` | `behavior/skills/manager.py` 模块级 | 技能增改删 | `webui` 技能页 |
 
 > 注：`llm.*` 提供商管理服务由 `core/llm/manage.py`、`core/llm/fetch.py`
-> **模块级注册**（import 即注册），无核心类实例；webui 的 `create_app()` 显式
-> import 三个所有者模块（llm.fetch / llm.manage / skills.manager）触发注册，
-> 并调用 `_verify_bus_services()` 做启动自检（依赖的 16 个服务缺一则记 ERROR）。
+> **模块级注册**（import 即注册），无核心类实例；注册触发与启动自检归**组装根**
+> `serve.assemble()`（2026-09-19 上收，原先散在 `webui.create_app()` 里）。
+> 依赖清单由各模块自己声明（如 `webui.REQUIRED_SERVICES`），由 serve 的
+> `services` 步骤统一核验，缺一则记 ERROR 并让 serve 以非零码退出。
 
 > 注：`activate_skill` 是注册在 `ToolRegistry` 里的普通工具（经 `tools.execute`
 > 总线执行），**不是**独立服务。skill 系统详见 `developDoc/SKILLS.md`。
@@ -183,8 +194,9 @@ summary = query_summary()            # 聚合统计
   - `core/bus.py` 新增 `has_service`（公开），供启动自检使用。
 - **webui 全部 9 个路由文件改走 `core.call`**，不再直接 import 任何
   `core.llm` / `core.audit` / `behavior.skills` 业务函数。
-- `webui/__init__.py` 的 `create_app()` 是**触发注册点**（import 三个
-  所有者模块 + `_verify_bus_services()` 启动自检），非跨模块业务调用。
+- `webui/__init__.py` 的 `create_app()` **只搭 HTTP 层**：注册触发与自检已上收到
+  组装根 `serve.assemble()`（2026-09-19，见 `developDoc/SERVE.md` 第 7 节），
+  避免同一份「需要哪些服务」的清单散在多处漂移。
 - **基础设施例外（可直连，不算模块间通讯）**：
   - `aris.config.get_settings()`（`.env` / `data_dir` 等启动级配置）。
   - `aris.cfgtoml`（模块级 toml 读取/写回，配置页用）。

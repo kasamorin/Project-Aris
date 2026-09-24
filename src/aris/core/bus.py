@@ -1,4 +1,4 @@
-"""统一通讯层（bus）：服务注册表 + 事件总线。
+"""跨模块通讯总线 CMCB（bus）：服务注册表 + 事件总线。
 
 所有模块间通讯（同步调用 / 事件广播）统一经过这里，达成：
 1. **解耦**：模块间不直接 import，只通过 `core.call` / `core.emit` 交互，
@@ -53,6 +53,12 @@ def has_service(service: str) -> bool:
     """检查某服务是否已注册（供启动自检等场景使用）。"""
     with _services_lock:
         return service in _services
+
+
+def services() -> list[str]:
+    """列出全部已注册服务名（供 `aris serve` 启动清单 / 自检展示）。"""
+    with _services_lock:
+        return sorted(_services)
 
 
 def call(service: str, *args: Any, **kwargs: Any) -> Any:
