@@ -6,11 +6,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from ..config import get_settings
+from ..core import provide
 from .auth import AuthMiddleware
 
 
@@ -113,3 +115,77 @@ def _verify_bus_services() -> None:
             f"WebUI 依赖的总线服务未注册: {', '.join(missing)}——"
             "请检查总线服务所有者模块是否正确导入"
         )
+
+
+def port_in_use(host: str, port: int) -> bool:
+    """端口是否已被占用（启动前的冲突检测，见 developDoc/SERVE.md 第 4 节）。"""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((host, port))
+        except OSError:
+            return True
+    return False
+
+
+def _resolve_bind(host: str | None = None, port: int | None = None) -> tuple[str, int, str]:
+    """解析监听地址：`config/webui.toml` → 免鉴权护栏；返回 (host, port, 警告文案)。"""
+    from dataclasses import dataclass
+
+    from aris.cfgtoml import load_config
+
+    @dataclass
+    class WebUIConfig:
+        host: str = "0.0.0.0"
+        port: int = 9690
+
+    web_config = load_config(WebUIConfig(), "webui.toml")
+    from .auth import resolve_bind_host
+
+    bind_host, warning = resolve_bind_host(host or web_config.host)
+    return bind_host, int(port or web_config.port), warning
+
+
+def probe_server() -> dict[str, Any]:
+    """总线服务：WebUI 启动探针（只读，不创建应用、不占端口）。"""
+    host, port, warning = _resolve_bind()
+    return {
+        "host": host,
+        "port": port,
+        "available": not port_in_use(host, port),
+        "warning": warning,
+    }
+
+
+def start_server(host: str | None = None, port: int | None = None) -> str:
+    """总线服务：启动 WebUI 管理后台（**阻塞**，`aris web` 与 `aris serve` 共用）。
+
+    端口被占用（多半是另一个 `aris web` / `aris serve` 在跑）时抛 RuntimeError，
+    由调用方决定是拒绝启动 webui 还是整体退出——见 developDoc/SERVE.md 第 4 节。
+    """
+    import uvicorn
+    from loguru import logger
+
+    bind_host, bind_port, warning = _resolve_bind(host, port)
+    if warning:
+        logger.warning(warning)
+    if port_in_use(bind_host, bind_port):
+        raise RuntimeError(
+            f"端口 {bind_host}:{bind_port} 已被占用，"
+            "可能是另一个 `aris web` / `aris serve` 在运行"
+        )
+    from .auth import is_password_configured
+
+    app = create_app()
+    if not is_password_configured():
+        logger.warning("WebUI 运行在免鉴权模式：任何能访问该地址的请求都视为已登录")
+    logger.info(f"WebUI 启动：http://{bind_host}:{bind_port}")
+    uvicorn.run(app, host=bind_host, port=bind_port, log_level="info")
+    return f"http://{bind_host}:{bind_port}"
+
+
+# 启动动作由 webui 自己提供（serve 只经总线调用，不代它做事）
+provide("webui.probe", probe_server)
+provide("webui.start", start_server)

@@ -29,6 +29,7 @@ data/
 htmlcov/
 
 # 编辑器 / 系统杂项
+.workbuddy/
 .vscode/
 .idea/
 *.swp

@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..core import provide
 from . import migrations  # noqa: F401  —— import 即登记建表迁移
 from .conf import KnowledgeConfig, get_knowledge_config
@@ -32,6 +34,24 @@ provide("knowledge.search", _service.search)
 provide("knowledge.reindex", _service.ensure_index)
 provide("knowledge.upload", _service.upload)
 provide("knowledge.status", _service.status)
+
+
+def _start() -> dict[str, Any]:
+    """总线服务：确保知识库 schema 与索引就绪（serve 启动步骤）。
+
+    库不可用时**快速失败**（抛 KnowledgeError）：serve 按 optional 步骤记 warning
+    并继续启动其余模块，不静默降级（见 developDoc/SERVE.md 第 5 节）。
+    """
+    if not get_knowledge_config().enabled:
+        return {"enabled": False, "docs": 0, "chunks": 0}
+    status = _service.status()
+    if status.get("error"):
+        raise KnowledgeError(f"知识库不可用：{status['error']}")
+    _service.ensure_index()
+    return {"enabled": True, "docs": status["docs"], "chunks": status["chunks"]}
+
+
+provide("knowledge.start", _start)
 
 __all__ = [
     "KnowledgeConfig",

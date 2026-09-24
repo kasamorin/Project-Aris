@@ -55,6 +55,12 @@ def has_service(service: str) -> bool:
         return service in _services
 
 
+def services() -> list[str]:
+    """列出全部已注册服务名（供 `aris serve` 启动清单 / 自检展示）。"""
+    with _services_lock:
+        return sorted(_services)
+
+
 def call(service: str, *args: Any, **kwargs: Any) -> Any:
     """调用一个已注册的服务，返回其返回值。
 
