@@ -154,6 +154,23 @@ def test_builtin_steps_shape() -> None:
     assert no_preload["store.embed"].start is None
 
 
+def test_probe_db_allows_auto_init(monkeypatch) -> None:
+    """便携实例不存在时：允许自动获取 → 提示将自动获取；禁止 → 直接报错。
+
+    这是「clone 下来一条命令起服务」的核心行为（`config/serve.toml: init_db`）。
+    """
+    import aris.serve.steps as steps
+
+    monkeypatch.setattr(
+        steps,
+        "call",
+        lambda *a, **k: {"installed": False, "running": False, "port": 55432},
+    )
+    assert "自动获取" in steps._probe_db(True)
+    with pytest.raises(RuntimeError):
+        steps._probe_db(False)
+
+
 def test_port_in_use() -> None:
     """端口探测：被占用为 True，释放后为 False。"""
     from aris.webui import port_in_use

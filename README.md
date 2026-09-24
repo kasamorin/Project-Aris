@@ -15,22 +15,42 @@ uv sync
 # 2. 准备环境变量（复制模板后按需填写，密钥只放 .env）
 cp .env.example .env
 
-# 3. 环境自检
-aris doctor
+# 3. 一条命令把服务全拉起来（管理后台 http://127.0.0.1:9690，Ctrl-C 停止）
+aris serve
+```
 
-# 4. 开始与 Aris 对话（交互循环）
-aris chat
+`aris serve` 会自动完成首次准备：获取便携 PostgreSQL + pgvector（约几十 MB，
+仅首次、需联网）、建库建表、后台预热本地 embedding、拉起 WebUI。**不需要预装
+PostgreSQL**，也不用手动初始化。首次启动会多等几分钟，之后启动约 20 秒。
+
+想只要数据库、或临时少起几项，用调试选项：
+
+```bash
+aris serve --dry-run            # 只体检并打印启动清单，不启动任何东西
+aris serve --only store.db      # 只把数据库拉起来
+aris serve --skip webui,store.embed
+```
+
+其他入口：
+
+```bash
+aris doctor     # 环境自检（含上面这份启动清单的探针）
+aris chat       # 终端文字对话（调试用，不随 serve 启动，也不自启数据库）
 ```
 
 ## CLI
 
 | 命令 | 说明 |
 |---|---|
-| `aris doctor` | 环境自检（Python 版本、C 扩展、.env、数据目录、LLM 配置摘要） |
+| `aris serve` | **一键启动各模块**（PG 自启 + 迁移、embedding 预热、知识库建表、WebUI），前台运行、清单与日志直出；`--only/--skip/--dry-run` 可裁剪 |
+| `aris doctor` | 环境自检（Python 版本、C 扩展、.env、数据目录）+ 各模块启动探针 |
 | `aris llm list` | 列出提供方与模型（密钥状态/能力/上下文），默认模型标 `[默认]` |
 | `aris llm check` | LLM 配置体检（重复 id / 缺 key / 默认模型），有问题非零退出 |
 | `aris llm test` | 手动验证 LLM 连接（流式对话，调试 fallback） |
 | `aris chat [消息]` | 文字对话：带消息走单次问答，不带进入交互循环 |
+| `aris db init\|start\|stop\|status\|psql` | 便携数据库（`serve` 已自动处理，一般不用手动敲） |
+| `aris knowledge add\|list\|remove\|search\|reindex` | 知识库摄入与检索（agent 只拿检索权，摄入走 CLI/WebUI 上传） |
+| `aris web` | 只起 WebUI 管理后台（端口被占用时明确拒绝启动） |
 
 `aris chat` 常用选项：
 

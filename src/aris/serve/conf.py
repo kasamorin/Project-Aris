@@ -18,6 +18,8 @@ class ServeConfig:
 
     # 数据库没在跑时是否自启便携实例
     start_db: bool = True
+    # 便携实例不存在时是否自动获取（clone 下来一条命令起服务；需联网，首次数分钟）
+    init_db: bool = True
     # 退出时是否停掉「本次自启的」数据库（原本就在跑的不动）
     stop_db_on_exit: bool = True
     # 启动时后台预热本地 embedding

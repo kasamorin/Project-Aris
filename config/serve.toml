@@ -4,6 +4,10 @@
 # 数据库没在跑时是否自启便携实例（false = 只探活，未运行即报错）
 start_db = true
 
+# 便携实例不存在时是否自动获取（micromamba + conda-forge，需联网，首次约数分钟）
+# 这是「clone 下来一条命令起服务」的关键；关掉则需先手动 `aris db init`
+init_db = true
+
 # serve 退出时是否停掉「本次自启的」数据库（原本就在跑的不动）
 stop_db_on_exit = true
 
