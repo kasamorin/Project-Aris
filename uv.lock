@@ -39,7 +39,6 @@ wheels = [
 
 [[package]]
 name = "aris"
-version = "0.4.1"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
