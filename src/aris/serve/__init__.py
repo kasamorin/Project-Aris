@@ -179,7 +179,9 @@ def serve(
 ) -> int:
     """`aris serve` 的入口：组装 → 选步骤 → 执行 → 打清单 → 拉起阻塞步骤 → 收尾。
 
-    返回进程退出码：0 正常，1 有 required 步骤失败，2 CLI 参数写错（由调用方给）。
+    退出码：``0`` 正常（含 Ctrl-C 正常收尾）、``1`` 有 required 步骤失败或阻塞步骤
+    起不来、``130`` 收尾时再次 Ctrl-C 强制退出（数据库可能仍在运行）。CLI 参数写错
+    由调用方返回 ``2``。详见 developDoc/SERVE.md「退出语义」。
     """
     config = get_serve_config()
     settings = get_settings()
@@ -226,12 +228,16 @@ def serve(
             if step.start is not None:
                 step.start()
     except KeyboardInterrupt:
-        logger.info("收到中断，正在收尾 ...")
+        logger.info("收到中断，正在收尾（再按一次 Ctrl-C 可强制退出）...")
     except Exception as exc:  # 阻塞步骤启动失败（如端口被占）不拖垮收尾
         logger.error(f"{deferred[0].label if deferred else 'serve'} 启动失败：{exc}")
         exit_code = 1
     finally:
-        _teardown(config)
+        try:
+            _teardown(config)
+        except KeyboardInterrupt:  # 二次 Ctrl-C：放弃收尾，立刻退出
+            logger.warning("再次收到中断：强制退出，数据库可能仍在运行（用 `aris db stop` 停）")
+            exit_code = 130
     return exit_code
 
 

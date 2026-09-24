@@ -4,7 +4,7 @@
 > 本文件只记当前进度（现状速览 / 最近动态 / 当前聚焦 / 路线）；已翻页的历史条目
 > 原文归档在 `developDoc/PROGRESS-ARCHIVE.md`（含各次踩坑记录，查旧事去那里）。
 
-## 当前版本：v0.4.0（2026-09-18）
+## 当前版本：v0.4.1（2026-09-19）
 
 ## 现状速览
 
@@ -15,21 +15,40 @@
 | `chat/` | 完成：会话逻辑 + TUI（`aris chat`），定位开发调试 |
 | `persona/` | 提示词工程版（单一 `persona.system_prompt`）；多人格见 BACKLOG #4 |
 | `webui/` | 完成：鉴权 / 仪表盘 / 审计 / 提供商 / 技能 / 配置 / 日志 / 知识库页 |
-| `serve/` | **首期已实现**：`aris serve [--only/--skip/--dry-run]` 启动编排（`developDoc/SERVE.md`） |
+| `serve/` | **完成（v0.4.1）**：`aris serve` 一条命令起全套（缺则自建 PG、自启、预热 embedding、并入 WebUI），`--only/--skip/--dry-run` 可裁剪 |
 | `store/` | 完成：便携 PG 17.11 + pgvector 0.8.1、embedding（本地 Bekko 384 维）、迁移 + 向量 helper |
 | `knowledge/` | 首期完成：两表 / 分块 / 摄入 / 纯向量检索 / CLI / agent 工具 / WebUI 页 |
 | `memory/` | **占位**，复用 `store/`（BACKLOG #5） |
 | `voice/` | **占位**（选型见 `developDoc/stt&&tts选型.md`） |
 
+- **入口**：`aris serve` 一条命令即可（首次自动获取便携 PG，需联网数分钟）；
+  `aris doctor` 体检、`aris chat` 终端对话（调试用，与应用互不干涉）
 - 测试：`uv run pytest` **103 passed**（DB 未运行则集成用例自动 skip）
-- 数据库：便携实例在 `data/pg`，项目本地、不注册系统服务——用 WebUI 前先 `aris db start`
+- 数据库：便携实例在 `data/pg`，项目本地、不注册系统服务；`aris serve` 会按需自建/自启，
+  退出时只停自己拉起的那个
 - 知识库现有资料：`data/knowledge/刑法.md`（约 129 块）
 - 待办方向：`developDoc/BACKLOG.md`（7 条中长期）
 - 已知陷阱（踩坑档案，修完就补）：`AGENTS.md`「已知陷阱」节
-- 本轮无遗留
 
 ## 最近动态
 
+### 2026-09-19：serve 收尾（v0.4.1 —— 首个「clone 下来一条命令起服务」的版本）
+
+- **缺则自建**：`store.start(init_if_missing=...)`——便携实例不存在时直接
+  `bootstrap_env()`（micromamba + conda-forge，联网首次数分钟），用户不必先敲
+  `aris db init`；开关 `config/serve.toml: init_db`（默认开），探针相应报
+  「未初始化（启动时将自动获取）」
+- **退出语义定案并落地**（SERVE.md 新增小节）：`0` 正常（含 Ctrl-C 正常收尾）、
+  `1` required 失败或 WebUI 起不来、`2` 参数写错、`130` 收尾期间再次 Ctrl-C 强制退出
+  （日志提示库可能仍在跑、用 `aris db stop`）
+- **README 快速开始改为 `aris serve` 一条命令**，补调试选项与 CLI 表
+  （serve / doctor / web / db / knowledge）
+- **端到端实测**（真实 `aris serve`，无参数）：PG 自启 → embedding 后台预热 →
+  `/` 与 `/knowledge` 均 200 → SIGINT → uvicorn 优雅关闭 → 停掉自己拉起的库 →
+  **退出码 0**，库回到停止态
+- 测试 `uv run pytest` **103 passed, 10 skipped**（新增「缺则自建」探针分支用例）
+
+### 2026-09-19：serve 收尾——组装根上收 + doctor 合流探针（SERVE.md 第 4–5 步）
 ### 2026-09-19：serve 收尾——组装根上收 + doctor 合流探针（SERVE.md 第 4–5 步）
 
 - **唯一组装根**：`serve.assemble()` 成为唯一一份「import 哪些所有者模块」的清单；

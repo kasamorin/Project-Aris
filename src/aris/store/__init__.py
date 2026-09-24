@@ -163,12 +163,21 @@ def _db_status() -> dict[str, Any]:
     }
 
 
-def _start(*, autostart: bool = True) -> dict[str, Any]:
-    """总线服务：确保数据库可用（按需自启便携实例）并应用迁移（serve 启动步骤）。"""
+def _start(*, autostart: bool = True, init_if_missing: bool = True) -> dict[str, Any]:
+    """总线服务：确保数据库可用（缺则自建、没跑则自启）并应用迁移（serve 启动步骤）。
+
+    ``init_if_missing`` 是「clone 下来一条命令起服务」的关键：便携实例不存在时
+    自动获取（micromamba + conda-forge，需联网，首次约数分钟）。
+    """
     global _db_started_by_serve
     env = detect()
-    if not env.installed or not (env.pgdata / "PG_VERSION").exists():
-        raise BootstrapError("便携数据库尚未初始化：先执行 `aris db init`")
+    installed = bool(env.installed and (env.pgdata / "PG_VERSION").exists())
+    if not installed:
+        if not init_if_missing:
+            raise BootstrapError("便携数据库尚未初始化：先执行 `aris db init`")
+        logger.info("首次运行：正在获取便携 PostgreSQL + pgvector（需联网，首次约数分钟）...")
+        env = bootstrap_env(env)  # initdb + 启动 + 建库 + 建扩展 + 写版本
+        _db_started_by_serve = True  # bootstrap_env 已经把它拉起来了
     running = is_running(env)
     if not running:
         if not autostart:
@@ -179,6 +188,7 @@ def _start(*, autostart: bool = True) -> dict[str, Any]:
     ensure_database(env)  # 幂等：建库 + 建 vector 扩展
     applied = _migrate_run()
     return {
+        "created": not installed,
         "running_before": running,
         "started_by_serve": _db_started_by_serve,
         "port": env.port,

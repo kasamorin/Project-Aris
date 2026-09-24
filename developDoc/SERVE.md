@@ -69,6 +69,10 @@ aris serve v0.4.0  data=…/data  pid=12345
 ### PG：默认自启，且**随 serve 一起停**
 
 - 启动时探活：在跑 → 复用；没跑 → 走 `aris db start` 的等价调用（`bootstrap_env`）。
+- **缺则自建（`init_db`，默认开）**：便携实例不存在时 serve 直接调用
+  `bootstrap_env()`（micromamba + conda-forge → `initdb` → 建库 → 建扩展，
+  需联网，首次约数分钟）。这是 **v0.4.1「clone 下来一条命令起服务」** 的关键——
+  用户不必先敲 `aris db init`。关掉该开关则退回「未初始化即报错并提示 `aris db init`」。
 - **退出时只停「serve 自己拉起的」那个**：判据是 serve 启动前 `is_running()` 为假。
   本来就在跑的不动——避免把用户自己开的库停掉。
 - 不注册系统服务、不后台常驻（沿用既有便携实例的运维约定）。
@@ -104,6 +108,20 @@ aris serve v0.4.0  data=…/data  pid=12345
   （如「数据库未运行：在项目目录执行 `aris db start`」）。**严禁静默降级**——
   没写日志等于没做错误处理，日志也就没用了。
 
+### 退出语义（定案）
+
+| 退出码 | 含义 |
+|---|---|
+| `0` | 正常结束（含 Ctrl-C 正常收尾：停 WebUI、停自己拉起的 PG） |
+| `1` | 有 required 步骤失败（`services` 自检 / `store.db`），或阻塞步骤（WebUI）起不来 |
+| `2` | CLI 参数写错（未知步骤名等），由 CLI 层返回 |
+| `130` | 收尾期间**再次 Ctrl-C**：放弃收尾立刻退出，并提示数据库可能仍在运行 |
+
+- 一次 `Ctrl-C`：停止 WebUI（uvicorn 自己收尾）→ 跑 `store.stop`
+  （只停自己拉起的实例）→ 退出。
+- 两次 `Ctrl-C`：第二次打断收尾并强制退出（退出码 130），日志明确写出
+  「用 `aris db stop` 停」——宁可留个在跑的库，也不要卡住终端。
+
 ## 6. 调试选项与配置（定案）
 
 CLI（默认全启）：
@@ -121,6 +139,7 @@ CLI（默认全启）：
 
 ```toml
 start_db = true            # 没跑就自启便携 PG
+init_db = true             # 便携实例不存在就自动获取（clone 即用；false = 要求先 aris db init）
 stop_db_on_exit = true     # 退出时停掉「自己拉起的」那个
 preload_embedding = true   # 启动即后台预热 embedding
 web_enabled = true         # 是否并入 WebUI
@@ -168,6 +187,7 @@ serve 只管「启不启」。
 | 3 | 端口探测 + 失败分级日志 + `--only/--skip/--dry-run` | ✅ 2026-09-19 |
 | 4 | 上收组装根与依赖清单（`create_app()` 只搭 HTTP 层；`serve.assemble()` 唯一触发点；`services` 步骤统一核验 `REQUIRED_SERVICES`） | ✅ 2026-09-19 |
 | 5 | 与 `aris doctor` 合流探针（`serve.probe_all()`；LLM 体检收敛为 `llm.providers.check` 总线服务） | ✅ 2026-09-19 |
+| 6 | 收尾（v0.4.1）：缺则自建（`init_db`）、退出语义与二次 Ctrl-C、README 快速开始改为 `aris serve`、端到端实测 | ✅ 2026-09-19 |
 
 首期落地（2026-09-19）：
 
@@ -180,12 +200,11 @@ serve 只管「启不启」。
   `port_in_use()`（`aris web` 也走同一道端口探测）
 - CLI 新增 `aris serve [--only] [--skip] [--dry-run]`；并把 serve / web 的控制台日志
   级别固定为 INFO——这两个命令的启动清单本身就是输出，被 WARNING 阈值吞掉就等于没有
-- 测试：`tests/test_serve.py` 9 例（选择与依赖闭包、dry-run 只探针、optional/required
-  失败分级、阻塞步骤延迟、真实步骤表结构、端口探测）
+- 测试：`tests/test_serve.py` 10 例（选择与依赖闭包、dry-run 只探针、optional/required
+  失败分级、阻塞步骤延迟、真实步骤表结构、缺则自建的探针分支、端口探测）
 
 已知缺口（下一步）：
 
 - **工具注册表 / agent loop / LLM engine / `skills.menu` 仍是会话级对象**（`ChatSession`
   里自建），serve 目前只做 import 级组装；将来做 BACKLOG #4/#7 时由 serve 持有单例
   （`behavior.start` 之类），届时该步骤才会有真实动作
-- 退出细节仍 `[待讨论]`：二次 Ctrl-C 强杀、退出码明细

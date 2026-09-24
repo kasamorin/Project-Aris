@@ -92,12 +92,14 @@ def _probe_behavior() -> str:
     return "skills 服务已注册（工具与 loop 按需构造）"
 
 
-def _probe_db() -> str:
+def _probe_db(init_if_missing: bool) -> str:
     """探针：数据库实例是否存在、是否在跑、有多少待执行迁移（不启动）。"""
     info: dict[str, Any] = call("store.db_status") or {}
     if not info:
         raise RuntimeError("store.db_status 未注册")
     if not info.get("installed"):
+        if init_if_missing:
+            return f"未初始化（启动时将自动获取，需联网）@127.0.0.1:{info['port']}"
         raise RuntimeError("便携数据库尚未初始化：执行 `aris db init`")
     if not info.get("running"):
         return f"未运行（启动时将自启）@127.0.0.1:{info['port']}"
@@ -105,12 +107,16 @@ def _probe_db() -> str:
     return f"PG 运行中 @127.0.0.1:{info['port']}；待执行迁移 {pending} 条"
 
 
-def _start_db(autostart: bool) -> str:
-    """启动动作：确保数据库可用并应用迁移（按需自启）。"""
-    info: dict[str, Any] = call("store.start", autostart=autostart) or {}
+def _start_db(autostart: bool, init_if_missing: bool) -> str:
+    """启动动作：确保数据库可用（缺则自建）并应用迁移。"""
+    info: dict[str, Any] = call(
+        "store.start", autostart=autostart, init_if_missing=init_if_missing
+    ) or {}
     if not info:
         raise RuntimeError("store.start 未注册")
-    if info.get("started_by_serve"):
+    if info.get("created"):
+        origin = "本次自建并自启"
+    elif info.get("started_by_serve"):
         origin = "本次自启"
     elif info.get("running_before"):
         origin = "复用已在运行的实例"
@@ -194,9 +200,9 @@ def build_steps(config: ServeConfig) -> list[ServeStep]:
         ServeStep(
             "store.db",
             "store.db",
-            _probe_db,
+            lambda: _probe_db(config.init_db),
             level="required",
-            start=lambda: _start_db(config.start_db),
+            start=lambda: _start_db(config.start_db, config.init_db),
         ),
         ServeStep("store.embed", "store.embed", _probe_embed, start=embed_start),
         ServeStep(
