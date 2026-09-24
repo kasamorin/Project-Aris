@@ -46,9 +46,10 @@
 
 ## 现状
 
-- 当前版本 **v0.4.1**（2026-09-19）。**这是首个「clone 下来一条命令起服务」的版本**：
-  `uv sync` → `cp .env.example .env` → `aris serve` 即可（首次自动获取便携 PG，需联网
-  数分钟），WebUI 落在 `http://127.0.0.1:9690`。
+- 当前版本 **v0.4.2（beta，2026-09-24）**。**这是首个「clone 下来一条命令起服务」的
+  版本**：`uv sync` → `cp .env.example .env` → `aris serve` 即可（首次自动获取便携 PG，
+  需联网数分钟），WebUI 落在 `http://127.0.0.1:9690`。**自本版起正式区分 beta 与正式版**
+  （0.x 全为 beta，正式版自 v1.0.0 起，tag 带 `-beta` 后缀），见「版本号更新」。
 - 骨架、LLM 接入、文字对话、行为扩展（函数调用）、联网搜索、人格系统均已完成。
 - **启动编排 `serve/` 已完成（v0.4.1）**：`aris serve [--only/--skip/--dry-run]` 一条命令
   拉起 PG（缺则自建、没跑则自启、退出只停自己拉起的）、后台预热 embedding、建知识表、
@@ -116,16 +117,47 @@
     合并提交用对应前缀一句话总结。日常 fix/docs 不进 main。
   - 小版本（feature 级）bump patch（如 0.2.1 → 0.2.2），大功能/破坏性
     变更 bump minor；**避免为了「有进展」频繁 bump**，攒到阶段性发布再 bump。
-- **版本与 tag**：`pyproject.toml` 为唯一版本源，`src/aris/__init__.py`
-  同步 `__version__`。版本发布时：develop 上 bump 版本 → 合并回 main →
-  打 `vX.Y.Z` tag → `git push --tags`。
-- **发布前检查（2026-08-30 起）**：`bash scripts/release-check.sh` 校验
-  版本三源一致（pyproject / `__init__.py` / uv.lock）+ 当前分支为 develop
-  + 无未合并 feature 分支；通过再走发布流程。`.githooks/pre-commit` 负责
-  分支保护（main 禁直接提交，develop 直提警告），换机后
-  `bash scripts/install-git-hooks.sh` 一次装齐。
+- **版本与 tag**：版本号唯一源与 bump 方式见下节「版本号更新」。发布时：
+  develop 上 bump 版本 → 合并回 main → 打 `vX.Y.Z` tag → push。
+- **发布前检查（2026-08-30 起）**：`bash scripts/release-check.sh` 校验版本号
+  单一来源结构 + 已安装元数据一致 + `uv lock --check` + 当前分支为 develop
+  + 无未合并 feature 分支 + 目标 tag 未占用；通过再走发布流程。
+  `.githooks/pre-commit` 负责分支保护（main 禁直接提交，develop 直提警告），
+  换机后 `bash scripts/install-git-hooks.sh` 一次装齐。
 - **保留分支**：`oldWish` 为历史保留分支（main 祖先：首次提交/README/许可证），
   **不要删除**，也不建议在此分支上继续开发。
+
+### 版本号更新（2026-09-24 定案）
+
+> 第三条开发规范。背景：版本号曾在 `pyproject.toml` / `src/aris/__init__.py` /
+> `uv.lock` **三处各写一遍**，0.2.0 / 0.2.2 / 0.2.6 每个版本都要额外的
+> 「同步 uv.lock / `__version__`」提交，v0.4.1 还误把版本行混进了功能提交。
+> **检查脚本只能治症状，于是改成结构上只剩一处。**
+
+- **唯一源：`src/aris/__init__.py` 的 `__version__`**（一行字面量）。
+  - `pyproject.toml` 走 `dynamic = ["version"]` +
+    `[tool.setuptools.dynamic] version = {attr = "aris.__version__"}`，**不再有
+    静态 `version` 行**；
+  - **`uv.lock` 不再记录本项目版本**（dynamic 版本不进锁文件），因此「三源同步」
+    这个动作本身消失了，也不再有同步提交。
+- **改版本只用 `bash scripts/bump-version.sh <版本|patch|minor|major>`**：
+  校验在干净的 develop 上、版本合法（PEP 440 的 `X.Y.Z`）、目标 tag 未占用，
+  然后改源 + `uv lock` + `uv sync`，最后打印提交与发布命令。**只改文件不提交。**
+- **`[tool.uv] cache-keys` 必须含 `src/aris/__init__.py`**：uv 默认只按
+  `pyproject.toml` 判定缓存，少了这一行改了版本也不会重建元数据（实测踩过，
+  `aris --version` 与已安装的 `aris==X` 会不一致）。
+- 版本号必须是 setuptools 能解析的 PEP 440 形式：`9.9.9-test` 之类会直接构建
+  失败（`InvalidVersion`），bump 脚本因此只放行 `X.Y.Z`。
+- 校验点全部在 `scripts/release-check.sh` 里，**发版前必跑**；上面那条 trap
+  （cache-keys）与「已安装元数据是否跟得上」都有对应检查项。
+- **tag 命名与 beta 标记（2026-09-24 定案）**：本项目的运行方式是 **clone 仓库**
+  而非下载 release，所以 beta 必须在 **tag** 上可见。
+  - `0.x` 阶段每个版本都是 beta → tag 带后缀：`v0.4.2-beta`（同版本只发一次，故不编号）；
+  - `v1.0.0` 起：正式版 `vX.Y.Z`；预发布 `vX.Y.Z-beta.N`，且 `__version__` 同步写
+    PEP 440 预发布形式（如 `1.3.0b1`），使 tag 与运行时版本**一一对应**——否则
+    `aris --version` 分不出自己是 beta 还是正式版；
+  - 规则实现在 `scripts/lib-version.sh`，`bump-version.sh` 与 `release-check.sh`
+    共用同一份，避免两处各写一遍。
 
 ### 歧义处理
 - 遇到不确定的需求或歧义，先停下来问用户确认，绝不擅自假设
@@ -285,9 +317,22 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
   （如 Message）；CLI 组装根可保持直接引用
 - 服务表与架构详见 `developDoc/CMCB.md`
 
+## 独立文档站（规划中，未开工）
+
+- **不在本仓库内**：面向使用者 + 插件作者的独立站点，另起仓库、**VitePress**，
+  本仓库不为其提供构建产物，也不与仓库内文档做同步机制。
+- 与本文档的分工：`README.md` 给使用者最短路径，`developDoc/` 留「为什么这么设计」
+  与踩坑（给改本仓库的人），**文档站讲「契约是什么、怎么写插件」**；内容全部新写。
+- 关键结构约束（**起站时照做，事后改代价最大**）：根路径 = 当前开发版，
+  历史版本在 `/vX.Y/`；链接一律相对、sidebar 需按版本前缀生成。
+- 服务表**不在站点上一开始全暴露**，只呈现插件可用的契约面。
+- 完整决策（URL 布局 / 版本节奏 / 坑 / 待办）见 `developDoc/DOCS-SITE.md`。
+- 与插件系统的关系：站点上「插件作者契约」可先写，**当作工具去推平
+  `PLUGIN.md` 的 `[待讨论]` 项**——契约落地后再改就要动代码。
+
 ## 开发路线
 
-> **当前聚焦：`aris serve` 已完成（v0.4.1，clone 下来一条命令起服务）**；
+> **当前聚焦：`aris serve` 已完成（v0.4.2 beta，clone 下来一条命令起服务）**；
 > 下一步候选：真 API 实测（等低成本方案）/ 知识库第二阶段（PDF、混合检索）/
 > 记忆系统（`memory/` 复用 `store/`，动手前先定人格与会话的持久化载体）。
 > WebUI 管理后台见 `developDoc/WEBUI.md`，启动编排见 `developDoc/SERVE.md`。
@@ -440,6 +485,14 @@ Termux 无法安装 pydantic-settings 的问题暂缓，若后续 Termux 成为�
 - **OpenVINO 遥测 warning 无害**：它往 `$HOME/intel` 写 consent 文件，
   `OV_TELEMETRY_OPT_OUT` 压不住（opt_in_checker 用 `Path.home()`），可忽略
 - 只读 `~/.cache` 的环境下给 uv 加 `UV_CACHE_DIR=$PWD/data/.uv-cache`
+
+### 打包 / 版本
+- **uv 默认只按 `pyproject.toml` 判定项目元数据缓存**：版本号走 dynamic
+  （从 `src/aris/__init__.py` 读）时，必须在 `[tool.uv] cache-keys` 里显式声明
+  该文件，否则改了版本 `uv sync` / `uv lock` 也不会重建元数据，出现
+  `aris --version` 与已安装的 `aris==X` 不一致（实测踩过，release-check 有对应检查）
+- **版本号必须能被 setuptools 解析为 PEP 440**：`9.9.9-test` 会让构建直接抛
+  `InvalidVersion`；bump 脚本只放行 `X.Y.Z`
 
 ### 命名 / 导入
 - **函数与模块同名会被包重导出遮蔽**：`bootstrap()` 与 `bootstrap.py` 撞名后
