@@ -32,6 +32,31 @@
 
 ## 最近动态
 
+### 2026-09-24：版本号改为单一来源（第三条开发规范）
+
+- 背景：版本号原先在 `pyproject.toml` / `src/aris/__init__.py` / `uv.lock` **三处各写
+  一遍**，0.2.0 / 0.2.2 / 0.2.6 每个版本都要额外的「同步 uv.lock / `__version__`」提交，
+  v0.4.1 还误把版本行混进了功能提交。回望全部提交后定案——**检查脚本只能治症状，
+  改成结构上只剩一处**
+- **唯一源 = `src/aris/__init__.py` 的 `__version__`**：`pyproject.toml` 改
+  `dynamic = ["version"]` + `[tool.setuptools.dynamic] version =
+  {attr = "aris.__version__"}`；**`uv.lock` 不再记录本项目版本**（实测 `uv lock` 把
+  `version = "0.4.1"` 那行删掉了），于是「三源同步」这个动作本身消失，也不再有同步提交
+- **两个实测踩坑（已进 AGENTS「已知陷阱」）**：① uv 默认只按 `pyproject.toml` 判定
+  元数据缓存，改了 `__init__.py` 也不重建（实测 `uv sync` 后仍是旧版本）→ 必须加
+  `[tool.uv] cache-keys = [{ file = "src/aris/__init__.py" }]`；② 版本号必须能被
+  setuptools 解析为 PEP 440（`9.9.9-test` 直接 `InvalidVersion` 构建失败）
+- 新增 `scripts/bump-version.sh <版本|patch|minor|major>`：校验干净 develop / 版本合法 /
+  tag 未占用 → 改源 + `uv lock` + `uv sync` → 打印提交与发布命令（**只改文件不提交**）
+- `scripts/release-check.sh` 重写为六项：单一来源结构（pyproject 不得再有静态 version、
+  必须有 dynamic + attr + cache-keys）、已安装元数据一致、`uv lock --check`、分支为
+  develop、无未合并分支、目标 tag 未占用；各失败分支已逐条实测
+- `AGENTS.md`：「Git 开发流程」里两条过时描述改掉，新增**「版本号更新（2026-09-24
+  定案）」**小节，「已知陷阱」新增「打包 / 版本」分组
+- 验证：`aris --version` → `Aris 0.4.1`；release-check 在 feature 分支如实报
+  FAIL（分支 + tag），在 develop 上结构项全绿
+- **本次不改版本号**：只改机制，版本仍为 v0.4.1
+
 ### 2026-09-19：serve 收尾（v0.4.1 —— 首个「clone 下来一条命令起服务」的版本）
 
 - **缺则自建**：`store.start(init_if_missing=...)`——便携实例不存在时直接
@@ -48,7 +73,6 @@
   **退出码 0**，库回到停止态
 - 测试 `uv run pytest` **103 passed, 10 skipped**（新增「缺则自建」探针分支用例）
 
-### 2026-09-19：serve 收尾——组装根上收 + doctor 合流探针（SERVE.md 第 4–5 步）
 ### 2026-09-19：serve 收尾——组装根上收 + doctor 合流探针（SERVE.md 第 4–5 步）
 
 - **唯一组装根**：`serve.assemble()` 成为唯一一份「import 哪些所有者模块」的清单；
